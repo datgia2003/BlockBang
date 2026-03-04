@@ -20,6 +20,8 @@ public class Board : MonoBehaviour
     private readonly List<int> highlightPolyominoColumns = new();
     private readonly List<int> highlightPolyominoRows = new();
 
+    private bool isClearingLine = false;
+
     // count lightning effects triggered by the current clear cycle
     private int lightningCount = 0;
 
@@ -250,29 +252,35 @@ public class Board : MonoBehaviour
 
     private void ClearFullLinesColumns()
     {
+        isClearingLine = true;
         foreach (var c in fullLineColumns)
         {
+            ScoreManager.Instance.AddScore(40);
             for (var r = 0; r < Size; ++r)
             {
                 HandleCellClear(r, c);
             }
         }
+        isClearingLine = false;
     }
     private void ClearFullLinesRows()
     {
+        isClearingLine = true;
         foreach (var r in fullLineRows)
         {
+            ScoreManager.Instance.AddScore(40);
             for (var c = 0; c < Size; ++c)
             {
                 HandleCellClear(r, c);
             }
         }
+        isClearingLine = false;
     }
 
     public void HandleCellClear(int r, int c)
     {
         if (data[r, c] != 2) return; // Already cleared or empty
-
+        if(!isClearingLine) ScoreManager.Instance.AddScore(5);
         var elemType = elements[r, c];
         var elementData = elementRegistry.GetElementData(elemType);
 
