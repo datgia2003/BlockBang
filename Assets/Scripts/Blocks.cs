@@ -30,11 +30,12 @@ public class Blocks : MonoBehaviour
             blocks[i].Initialize();
         }
         polyominoIndexes = new int[blocks.Length];
-        Generate();
+        GenerateNewBlocks();
     }
 
-    private void Generate()
+    public void GenerateNewBlocks()
     {
+        blockCount = 0;
         for (var i = 0; i < blocks.Length; ++i)
         {
             polyominoIndexes[i] = Random.Range(0, Polyominos.Length);
@@ -50,7 +51,7 @@ public class Blocks : MonoBehaviour
         if (blockCount <= 0)
         {
             blockCount = 0;
-            Generate();
+            GenerateNewBlocks();
         }
         var isLose = true;
         for (var i = 0; i < blocks.Length; ++i)
@@ -63,7 +64,19 @@ public class Blocks : MonoBehaviour
         }
         if (isLose == true)
         {
-            isGameOver = true;
+            if (SkillManager.Instance != null && SkillManager.Instance.AreAnySkillsReady())
+            {
+                // A skill is ready, so don't end the game yet.
+                // The player might be able to use the skill to continue.
+            }
+            else
+            {
+                isGameOver = true;
+                if (UIManager.Instance != null)
+                {
+                    UIManager.Instance.ShowGameOverScreen();
+                }
+            }
         }
     }
     public void ResetSortingOrder()

@@ -189,6 +189,7 @@ public class Board : MonoBehaviour
         }
         ClearFullLines(point, polyominoColumns, polyominoRows);
         hoverPoints.Clear();
+        SkillManager.Instance.OnBlockPlaced();
     }
 
     private void ClearFullLines(Vector2Int point, int polyominoColumns, int polyominoRows)
