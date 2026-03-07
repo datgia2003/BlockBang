@@ -97,5 +97,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c102ec48066c414dba2e9fb7a070237, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  normal: {fileID: 21300000, guid: 71bbf5c3aadc70b4894fd34d17b0ea35, type: 3}
-  highlight: {fileID: 21300000, guid: 422d161cbd63e82488f7cbd78dcd959e, type: 3}
+  defaultNormal: {fileID: 21300000, guid: 71bbf5c3aadc70b4894fd34d17b0ea35, type: 3}
+  defaultHighlight: {fileID: 21300000, guid: 422d161cbd63e82488f7cbd78dcd959e, type: 3}

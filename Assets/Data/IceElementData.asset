@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: IceElementData
   m_EditorClassIdentifier: 
   ElementType: 2
-  ElementColor: {r: 0.2270826, g: 0.3344963, b: 0.764151, a: 1}
+  NormalSprite: {fileID: -552714465, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
+  HighlightSprite: {fileID: -552714465, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
+  ElementColor: {r: 1, g: 1, b: 1, a: 1}
   SpawnChance: 0.075
   Effect: {fileID: 11400000, guid: 5c015a872e88bae4bb98342569f18bce, type: 2}

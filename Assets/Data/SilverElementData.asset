@@ -10,11 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5244520a180aa734bbb9f7c95c8c242c, type: 3}
-  m_Name: LightningElementData
+  m_Name: SilverElementData
   m_EditorClassIdentifier: 
-  ElementType: 3
-  NormalSprite: {fileID: -429053260, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
-  HighlightSprite: {fileID: -429053260, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
+  ElementType: 4
   ElementColor: {r: 1, g: 1, b: 1, a: 1}
-  SpawnChance: 0.075
-  Effect: {fileID: 11400000, guid: f427c847ce93c054694ad6caaf14dfbf, type: 2}
+  SpawnChance: 0.1
+  Effect: {fileID: 0}

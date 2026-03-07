@@ -35,13 +35,11 @@ public class UIManager : MonoBehaviour
         {
             gameOverPanel.SetActive(true);
             if (gameOverText != null)
-            {
                 gameOverText.text = "GAME OVER!";
-            }
             if (restartText != null)
-            {
                 restartText.text = "Touch Screen to Restart";
-            }
         }
+        // === SOUND ===
+        SoundManager.Instance?.Play(SoundManager.SFX.GameOver, pitchVariance: 0f);
     }
 }

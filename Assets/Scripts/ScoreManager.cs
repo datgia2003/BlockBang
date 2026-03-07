@@ -8,6 +8,10 @@ public class ScoreManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI scoreText;
     private int score;
 
+    /// <summary>Current score — read by Blocks for difficulty scaling.</summary>
+    public int Score => score;
+
+
     private void Awake()
     {
         if (Instance == null)

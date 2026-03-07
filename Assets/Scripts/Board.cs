@@ -170,6 +170,7 @@ public class Board : MonoBehaviour
     private void Place(Vector2Int point, int polyominoColumns, int polyominoRows, int[,] polyomino, Element[,] blockElements)
     {
         // place each cell and record element type
+        int cellIndex = 0;
         for (var r = 0; r < polyominoRows; ++r)
         {
             for (var c = 0; c < polyominoColumns; ++c)
@@ -180,10 +181,24 @@ public class Board : MonoBehaviour
                     data[boardPos.y, boardPos.x] = 2;
                     var elem = blockElements[r, c];
                     elements[boardPos.y, boardPos.x] = elem;
-                    
+
                     var elementData = elementRegistry.GetElementData(elem);
-                    cells[boardPos.y, boardPos.x].SetElement(elem, elementData);
-                    cells[boardPos.y, boardPos.x].Normal();
+                    var cell = cells[boardPos.y, boardPos.x];
+                    cell.SetElement(elem, elementData);
+                    cell.Normal();
+
+                    // === JUICE: staggered pop-in per cell ===
+                    float delay = cellIndex * 0.018f;
+                    if (delay > 0f)
+                    {
+                        // Pass board position so we can abort if cell was cleared during delay
+                        StartCoroutine(DelayedPlaceAnim(cell, delay, boardPos.y, boardPos.x));
+                    }
+                    else
+                    {
+                        cell.PlayPlaceAnimation();
+                    }
+                    cellIndex++;
                 }
             }
         }
@@ -192,12 +207,27 @@ public class Board : MonoBehaviour
         SkillManager.Instance.OnBlockPlaced();
     }
 
+    private System.Collections.IEnumerator DelayedPlaceAnim(Cell cell, float delay, int boardR, int boardC)
+    {
+        yield return new WaitForSeconds(delay);
+        // If the cell was cleared while we were waiting, skip the pop-in.
+        // Otherwise DelayedPlaceAnim would cancel the FlashAndClear animation.
+        if (cell != null && data[boardR, boardC] == 2)
+            cell.PlayPlaceAnimation();
+    }
+
     private void ClearFullLines(Vector2Int point, int polyominoColumns, int polyominoRows)
     {
         FullLineColumns(point.x, point.x + polyominoColumns);
         FullLineRows(point.y, point.y + polyominoRows);
         ClearFullLinesColumns();
         ClearFullLinesRows();
+
+        // === SOUND: play once for the entire clear batch ===
+        int totalCleared = fullLineColumns.Count + fullLineRows.Count;
+        if (totalCleared > 0)
+            SoundManager.Instance?.PlayLineClear(totalCleared);
+
         AfterClearingEffects();
     }
     private void FullLineColumns(int from, int to)
@@ -257,9 +287,35 @@ public class Board : MonoBehaviour
         foreach (var c in fullLineColumns)
         {
             ScoreManager.Instance.AddScore(40);
+
+            // === JUICE: wave animation + screen shake + particles ===
+            if (ScreenShake.Instance != null)
+                ScreenShake.Instance.Shake(0.20f, 0.14f);
+
+            // Burst particles at the center of the column
+            if (ParticleBurst.Instance != null)
+            {
+                var midWorld = cells[Size / 2, c].transform.position;
+                var colColor = cells[0, c].ElementType != Element.Normal
+                    ? elementRegistry.GetElementData(cells[0, c].ElementType)?.ElementColor ?? Color.white
+                    : Color.white;
+                ParticleBurst.Instance.LineClearBurst(midWorld, colColor);
+            }
+
             for (var r = 0; r < Size; ++r)
             {
-                HandleCellClear(r, c);
+                float delay = r * 0.03f; // wave top-to-bottom
+                cells[r, c].PlayClearAnimation(delay);
+                // Actual data clear (instant)
+                if (data[r, c] == 2)
+                {
+                    var elemType = elements[r, c];
+                    var elementData = elementRegistry.GetElementData(elemType);
+                    data[r, c] = 0;
+                    elements[r, c] = Element.Normal;
+                    if (elementData != null && elementData.Effect != null)
+                        elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
+                }
             }
         }
         isClearingLine = false;
@@ -270,9 +326,33 @@ public class Board : MonoBehaviour
         foreach (var r in fullLineRows)
         {
             ScoreManager.Instance.AddScore(40);
+
+            // === JUICE: wave animation + screen shake + particles ===
+            if (ScreenShake.Instance != null)
+                ScreenShake.Instance.Shake(0.20f, 0.14f);
+
+            if (ParticleBurst.Instance != null)
+            {
+                var midWorld = cells[r, Size / 2].transform.position;
+                var rowColor = cells[r, 0].ElementType != Element.Normal
+                    ? elementRegistry.GetElementData(cells[r, 0].ElementType)?.ElementColor ?? Color.white
+                    : Color.white;
+                ParticleBurst.Instance.LineClearBurst(midWorld, rowColor);
+            }
+
             for (var c = 0; c < Size; ++c)
             {
-                HandleCellClear(r, c);
+                float delay = c * 0.03f; // wave left-to-right
+                cells[r, c].PlayClearAnimation(delay);
+                if (data[r, c] == 2)
+                {
+                    var elemType = elements[r, c];
+                    var elementData = elementRegistry.GetElementData(elemType);
+                    data[r, c] = 0;
+                    elements[r, c] = Element.Normal;
+                    if (elementData != null && elementData.Effect != null)
+                        elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
+                }
             }
         }
         isClearingLine = false;
@@ -281,26 +361,30 @@ public class Board : MonoBehaviour
     public void HandleCellClear(int r, int c)
     {
         if (data[r, c] != 2) return; // Already cleared or empty
-        if(!isClearingLine) ScoreManager.Instance.AddScore(5);
+        if (!isClearingLine) ScoreManager.Instance.AddScore(5);
         var elemType = elements[r, c];
         var elementData = elementRegistry.GetElementData(elemType);
 
-        // IMPORTANT: Clear the cell's data BEFORE executing the effect
-        // to prevent infinite loops (e.g., Fire block triggering itself).
         data[r, c] = 0;
         elements[r, c] = Element.Normal;
-        
-        // Execute the element's effect, if it has one.
-        if (elementData != null && elementData.Effect != null)
-        {
-            elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
-        }
 
-        // If the cell is still unoccupied after the effect (e.g. not an Ice block), hide it.
-        if (data[r,c] == 0)
+        // === SOUND: soft click for element-triggered cell clears ===
+        if (!isClearingLine)
+            SoundManager.Instance?.Play(SoundManager.SFX.CellClear);
+
+        // === JUICE ===
+        if (ParticleBurst.Instance != null)
         {
-            cells[r, c].Hide();
+            var cellColor = (elementData != null) ? elementData.ElementColor : Color.white;
+            ParticleBurst.Instance.PopBurst(cells[r, c].transform.position, cellColor);
         }
+        cells[r, c].PlayClearAnimation(0f);
+
+        if (elementData != null && elementData.Effect != null)
+            elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
+
+        if (data[r, c] != 0)
+            cells[r, c].Normal();
     }
 
     private void AfterClearingEffects()

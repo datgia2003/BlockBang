@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: FireElementData
   m_EditorClassIdentifier: 
   ElementType: 1
-  ElementColor: {r: 1, g: 0.061781973, b: 0.051886797, a: 1}
+  NormalSprite: {fileID: 1679675390, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
+  HighlightSprite: {fileID: 1679675390, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
+  ElementColor: {r: 1, g: 1, b: 1, a: 1}
   SpawnChance: 0.03
   Effect: {fileID: 11400000, guid: 9242bc11b0cfd6d4e8031346ed2c222f, type: 2}

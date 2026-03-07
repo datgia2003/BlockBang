@@ -26,6 +26,7 @@ public class Block : MonoBehaviour
     private Vector2Int currentDragPoint;
     private Vector2 center;
     private Camera mainCamera;
+    private Coroutine pickupJuice; // track so we can cancel before restoring scale
 
     void Awake()
     {
@@ -99,6 +100,13 @@ public class Block : MonoBehaviour
         blocks.ResetSortingOrder();
         SetSortingOrder(1);
 
+        // === SOUND ===
+        SoundManager.Instance?.Play(SoundManager.SFX.BlockPickup);
+
+        // === JUICE: punch scale on pick-up ===
+        CancelPickupJuice();
+        if (JuiceManager.Instance != null)
+            pickupJuice = JuiceManager.Instance.PunchScale(transform, 0.25f, 0.18f);
 
         currentDragPoint = Vector2Int.RoundToInt((Vector2)transform.position - center);
         board.Hover(currentDragPoint, polyominoIndex);
@@ -129,15 +137,45 @@ public class Block : MonoBehaviour
     private void OnMouseUp()
     {
         previousMousePosition = Vector3.positiveInfinity;
+
+        // Stop the pickup punch coroutine — don't let it override scale anymore
+        CancelPickupJuice();
+
         currentDragPoint = Vector2Int.RoundToInt((Vector2)transform.position - center);
-        if (board.Place(currentDragPoint, polyominoIndex, elementMap))
-        {
-            gameObject.SetActive(false);
-            blocks.Remove();
-        }
+        bool placed = board.Place(currentDragPoint, polyominoIndex, elementMap);
+
+        // === Restore position & scale FIRST, before any further juice ===
         transform.localPosition = position;
         transform.localScale = scale;
 
+        if (placed)
+        {
+            // === SOUND ===
+            SoundManager.Instance?.Play(SoundManager.SFX.BlockPlace);
+            // === JUICE ===
+            if (ScreenShake.Instance != null)
+                ScreenShake.Instance.Shake(0.10f, 0.06f);
+            gameObject.SetActive(false);
+            blocks.Remove();
+        }
+        else
+        {
+            // === SOUND ===
+            SoundManager.Instance?.Play(SoundManager.SFX.BlockInvalid);
+            // === JUICE: invalid drop — wobble from correct base scale ===
+            if (JuiceManager.Instance != null)
+                JuiceManager.Instance.PunchScale(transform, 0.15f, 0.20f);
+        }
+    }
+
+    private void CancelPickupJuice()
+    {
+        if (pickupJuice != null && JuiceManager.Instance != null)
+        {
+            JuiceManager.Instance.StopCoroutine(pickupJuice);
+            pickupJuice = null;
+        }
+        // Do NOT restore localScale here — caller is responsible for setting the correct scale
     }
     private void Highlight(List<int> fullLineColumns, List<int> fullLineRows)
     {
