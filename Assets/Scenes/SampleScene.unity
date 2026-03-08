@@ -292,6 +292,7 @@ Transform:
   - {fileID: 442588998}
   - {fileID: 1764938003}
   - {fileID: 1500134389}
+  - {fileID: 1142748879}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &442588996
@@ -931,8 +932,9 @@ GameObject:
   - component: {fileID: 1142748879}
   - component: {fileID: 1142748878}
   - component: {fileID: 1142748877}
+  - component: {fileID: 1142748880}
   m_Layer: 0
-  m_Name: JuiceFeelObject
+  m_Name: JuiceManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -970,13 +972,25 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1142748876}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1756.0665, y: 407.2274, z: -1.4514855}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 47.34253, y: 70.722046, z: -1.4514855}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 362880022}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1142748880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1142748876}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d45126883421f847b67c33f3dc6ab2d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1152907167
 GameObject:
   m_ObjectHideFlags: 0
@@ -2432,4 +2446,3 @@ SceneRoots:
   - {fileID: 362880022}
   - {fileID: 457065483}
   - {fileID: 334554238}
-  - {fileID: 1142748879}

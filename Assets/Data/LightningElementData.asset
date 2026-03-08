@@ -16,5 +16,5 @@ MonoBehaviour:
   NormalSprite: {fileID: -429053260, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
   HighlightSprite: {fileID: -429053260, guid: 0ac5e0f02ab633a48a2351c3104c3e72, type: 3}
   ElementColor: {r: 1, g: 1, b: 1, a: 1}
-  SpawnChance: 0.075
+  SpawnChance: 0.07
   Effect: {fileID: 11400000, guid: f427c847ce93c054694ad6caaf14dfbf, type: 2}

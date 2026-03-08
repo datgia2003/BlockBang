@@ -59,6 +59,10 @@ public class Blocks : MonoBehaviour
             blocks[i].Show(polyominoIndexes[i]);
             blockCount++;
         }
+
+        // Check if even the new batch has no valid placements
+        // (can happen if board is nearly full and all retries failed)
+        CheckGameOver();
     }
 
     public void Remove()
@@ -68,7 +72,8 @@ public class Blocks : MonoBehaviour
         {
             blockCount = 0;
             GenerateNewBlocks();
-            return; // GenerateNewBlocks already handles game-over check via the new batch
+            // GenerateNewBlocks already calls CheckGameOver at the end
+            return;
         }
         CheckGameOver();
     }

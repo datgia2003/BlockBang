@@ -5,11 +5,12 @@ public class IceEffect : ElementEffect
 {
     public override void ExecuteEffect(Board board, Vector2Int position)
     {
-        // The Ice block is not cleared on the first pass.
-        // It "melts" and becomes a Normal block.
-        // The HandleCellClear in Board.cs will have already cleared the data for this cell,
-        // so we need to set it back to a normal occupied state.
+        // The Ice block "shatters" on first hit — becomes a Normal block.
         board.SetCellAsOccupied(position.x, position.y);
         board.SetElementAt(position.x, position.y, Element.Normal);
+
+        // === VFX: ice shatter at this position ===
+        var worldPos = board.GetCellWorldPosition(position.x, position.y);
+        ElementVFX.Instance?.PlayIceVFX(worldPos);
     }
 }

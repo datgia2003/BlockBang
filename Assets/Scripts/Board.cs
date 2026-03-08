@@ -25,6 +25,21 @@ public class Board : MonoBehaviour
     // count lightning effects triggered by the current clear cycle
     private int lightningCount = 0;
 
+    // ── Effect Chain (queued, coroutine-driven) ───────────────
+    [Header("Effect Chain")]
+    [Tooltip("Seconds between each Fire chain / Lightning strike visual step.")]
+    [SerializeField] private float chainStepDelay = 0.20f;
+
+    /// <summary>
+    /// Queue of pending cell clears that should be processed one-by-one with a delay.
+    /// Populated by HandleCellClear when called while a chain or line-clear is active.
+    /// Vector2Int stores (x=column, y=row).
+    /// </summary>
+    private readonly Queue<Vector2Int> pendingClears = new();
+
+    /// <summary>True while ExecuteCellClear is running, so recursive Fire calls get deferred.</summary>
+    private bool isRunningEffectChain = false;
+
     void Start()
     {
         for (var r = 0; r < Size; ++r)
@@ -79,12 +94,48 @@ public class Board : MonoBehaviour
     {
         lightningCount += amount;
     }
+
+    /// <summary>
+    /// Returns the world position of a board cell. Used by ElementVFX.
+    /// </summary>
+    public Vector3 GetCellWorldPosition(int x, int y)
+    {
+        if (IsWithinBounds(x, y))
+            return cells[y, x].transform.position;
+        return Vector3.zero;
+    }
+
+    /// <summary>
+    /// Returns up to `count` random positions of currently occupied cells.
+    /// Used by LightningEffect to preview VFX targets before the clear happens.
+    /// </summary>
+    public List<Vector2Int> PeekRandomOccupiedCells(int count)
+    {
+        var candidates = new List<Vector2Int>();
+        for (int r = 0; r < Size; r++)
+            for (int c = 0; c < Size; c++)
+                if (data[r, c] == 2)
+                    candidates.Add(new Vector2Int(c, r));
+
+        // Shuffle and take `count`
+        for (int i = candidates.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
+        }
+
+        return candidates.GetRange(0, Mathf.Min(count, candidates.Count));
+    }
     #endregion
 
-    public void Hover(Vector2Int point, int polyominoIndex)
+    // Stores the element map of the block currently being hovered so Hover() can look up
+    // the correct ElementData for each ghost cell.
+    private Element[,] hoverElementMap;
+
+    public void Hover(Vector2Int point, int polyominoIndex, Element[,] elementMap = null)
     {
         var polyomino = Polyominos.Get(polyominoIndex);
-        var polyominoRows = polyomino.GetLength(0);
+        var polyominoRows    = polyomino.GetLength(0);
         var polyominoColumns = polyomino.GetLength(1);
         UnHover();
         Unhighlight();
@@ -92,21 +143,18 @@ public class Board : MonoBehaviour
         highlightPolyominoColumns.Clear();
         highlightPolyominoRows.Clear();
 
+        hoverElementMap = elementMap; // remember for ShowHover()
+
         HoverPoints(point, polyominoRows, polyominoColumns, polyomino);
         if (hoverPoints.Count > 0)
         {
-            Hover();
+            ShowHover(point, polyomino);
             Highlight(point, polyominoColumns, polyominoRows);
             foreach (var c in fullLineColumns)
-            {
                 highlightPolyominoColumns.Add(c - point.x);
-            }
             foreach (var r in fullLineRows)
-            {
                 highlightPolyominoRows.Add(r - point.y);
-            }
         }
-
     }
     private void HoverPoints(Vector2Int point, int polyominoRows, int polyominoColumns, int[,] polyomino)
     {
@@ -132,15 +180,30 @@ public class Board : MonoBehaviour
         if (point.x < 0 || Size <= point.x) return false;
         if (point.y < 0 || Size <= point.y) return false;
         if (data[point.y, point.x] > 0) return false;
-
         return true;
     }
-    private void Hover()
+    /// <summary>Show ghost cells using the dragged block's element data.</summary>
+    private void ShowHover(Vector2Int origin, int[,] polyomino)
     {
-        foreach (var hoverPoint in hoverPoints)
+        int polyominoRows    = polyomino.GetLength(0);
+        int polyominoColumns = polyomino.GetLength(1);
+        foreach (var hp in hoverPoints)
         {
-            data[hoverPoint.y, hoverPoint.x] = 1;
-            cells[hoverPoint.y, hoverPoint.x].Hover();
+            // Map from board position back to polyomino local coords
+            int pr = hp.y - origin.y;
+            int pc = hp.x - origin.x;
+
+            ElementData elemData = null;
+            if (hoverElementMap != null
+                && pr >= 0 && pr < polyominoRows
+                && pc >= 0 && pc < polyominoColumns)
+            {
+                var elem = hoverElementMap[pr, pc];
+                elemData = elementRegistry.GetElementData(elem);
+            }
+
+            data[hp.y, hp.x] = 1;
+            cells[hp.y, hp.x].Hover(elemData);
         }
     }
     private void UnHover()
@@ -148,9 +211,11 @@ public class Board : MonoBehaviour
         foreach (var hoverPoint in hoverPoints)
         {
             data[hoverPoint.y, hoverPoint.x] = 0;
-            cells[hoverPoint.y, hoverPoint.x].Hide();
+            // HoverReset clears stale element data so old sprites don't bleed into next hover
+            cells[hoverPoint.y, hoverPoint.x].HoverReset();
         }
         hoverPoints.Clear();
+        hoverElementMap = null;
     }
     
     public bool Place(Vector2Int point, int polyominoIndex, Element[,] blockElements)
@@ -220,15 +285,16 @@ public class Board : MonoBehaviour
     {
         FullLineColumns(point.x, point.x + polyominoColumns);
         FullLineRows(point.y, point.y + polyominoRows);
-        ClearFullLinesColumns();
+        ClearFullLinesColumns(); // isClearingLine=true → effects enqueue into pendingClears
         ClearFullLinesRows();
 
-        // === SOUND: play once for the entire clear batch ===
+        // Play sound immediately for the direct line clears
         int totalCleared = fullLineColumns.Count + fullLineRows.Count;
         if (totalCleared > 0)
             SoundManager.Instance?.PlayLineClear(totalCleared);
 
-        AfterClearingEffects();
+        // Process Fire chains, Lightning, and cascade full-lines with visual delays
+        StartCoroutine(EffectChainRoutine());
     }
     private void FullLineColumns(int from, int to)
     {
@@ -287,12 +353,8 @@ public class Board : MonoBehaviour
         foreach (var c in fullLineColumns)
         {
             ScoreManager.Instance.AddScore(40);
+            ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
-            // === JUICE: wave animation + screen shake + particles ===
-            if (ScreenShake.Instance != null)
-                ScreenShake.Instance.Shake(0.20f, 0.14f);
-
-            // Burst particles at the center of the column
             if (ParticleBurst.Instance != null)
             {
                 var midWorld = cells[Size / 2, c].transform.position;
@@ -304,17 +366,17 @@ public class Board : MonoBehaviour
 
             for (var r = 0; r < Size; ++r)
             {
-                float delay = r * 0.03f; // wave top-to-bottom
-                cells[r, c].PlayClearAnimation(delay);
-                // Actual data clear (instant)
+                cells[r, c].PlayClearAnimation(r * 0.03f);
                 if (data[r, c] == 2)
                 {
-                    var elemType = elements[r, c];
+                    var elemType    = elements[r, c];
                     var elementData = elementRegistry.GetElementData(elemType);
-                    data[r, c] = 0;
-                    elements[r, c] = Element.Normal;
-                    if (elementData != null && elementData.Effect != null)
-                        elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
+                    data[r, c]       = 0;
+                    elements[r, c]   = Element.Normal;
+                    // isClearingLine=true → Fire's HandleCellClear calls go to pendingClears
+                    elementData?.Effect?.ExecuteEffect(this, new Vector2Int(c, r));
+                    // Ice may have restored this cell
+                    if (data[r, c] != 0) cells[r, c].Normal();
                 }
             }
         }
@@ -326,10 +388,7 @@ public class Board : MonoBehaviour
         foreach (var r in fullLineRows)
         {
             ScoreManager.Instance.AddScore(40);
-
-            // === JUICE: wave animation + screen shake + particles ===
-            if (ScreenShake.Instance != null)
-                ScreenShake.Instance.Shake(0.20f, 0.14f);
+            ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
             if (ParticleBurst.Instance != null)
             {
@@ -342,79 +401,212 @@ public class Board : MonoBehaviour
 
             for (var c = 0; c < Size; ++c)
             {
-                float delay = c * 0.03f; // wave left-to-right
-                cells[r, c].PlayClearAnimation(delay);
+                cells[r, c].PlayClearAnimation(c * 0.03f);
                 if (data[r, c] == 2)
                 {
-                    var elemType = elements[r, c];
+                    var elemType    = elements[r, c];
                     var elementData = elementRegistry.GetElementData(elemType);
-                    data[r, c] = 0;
-                    elements[r, c] = Element.Normal;
-                    if (elementData != null && elementData.Effect != null)
-                        elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
+                    data[r, c]       = 0;
+                    elements[r, c]   = Element.Normal;
+                    elementData?.Effect?.ExecuteEffect(this, new Vector2Int(c, r));
+                    if (data[r, c] != 0) cells[r, c].Normal();
                 }
             }
         }
         isClearingLine = false;
     }
 
+    /// <summary>
+    /// Entry point for all element-triggered cell clears.
+    /// When called while a line-clear or effect-chain is active, defers to the queue.
+    /// Otherwise executes immediately and starts the chain coroutine.
+    /// </summary>
     public void HandleCellClear(int r, int c)
     {
-        if (data[r, c] != 2) return; // Already cleared or empty
+        if (data[r, c] != 2) return;
+
+        // Defer: we're inside a line-clear loop or an active chain step → enqueue
+        if (isClearingLine || isRunningEffectChain)
+        {
+            pendingClears.Enqueue(new Vector2Int(c, r));
+            return;
+        }
+
+        // Called outside any chain context: execute and let the chain coroutine handle follow-ups
+        ExecuteCellClear(r, c);
+    }
+
+    /// <summary>
+    /// Actual clear logic. Sets data=0, plays VFX/sound, executes element effect.
+    /// Wraps the effect call in isRunningEffectChain so Fire's recursive calls are deferred.
+    /// </summary>
+    private void ExecuteCellClear(int r, int c)
+    {
+        if (data[r, c] != 2) return;
         if (!isClearingLine) ScoreManager.Instance.AddScore(5);
-        var elemType = elements[r, c];
+        var elemType    = elements[r, c];
         var elementData = elementRegistry.GetElementData(elemType);
 
-        data[r, c] = 0;
+        data[r, c]     = 0;
         elements[r, c] = Element.Normal;
 
-        // === SOUND: soft click for element-triggered cell clears ===
         if (!isClearingLine)
             SoundManager.Instance?.Play(SoundManager.SFX.CellClear);
 
-        // === JUICE ===
         if (ParticleBurst.Instance != null)
-        {
-            var cellColor = (elementData != null) ? elementData.ElementColor : Color.white;
-            ParticleBurst.Instance.PopBurst(cells[r, c].transform.position, cellColor);
-        }
+            ParticleBurst.Instance.PopBurst(cells[r, c].transform.position,
+                elementData?.ElementColor ?? Color.white);
         cells[r, c].PlayClearAnimation(0f);
 
-        if (elementData != null && elementData.Effect != null)
+        if (elementData?.Effect != null)
+        {
+            isRunningEffectChain = true;  // Fire's neighbors will be enqueued, not recursed
             elementData.Effect.ExecuteEffect(this, new Vector2Int(c, r));
+            isRunningEffectChain = false;
+        }
 
-        if (data[r, c] != 0)
+        if (data[r, c] != 0) // Ice may have restored the cell
             cells[r, c].Normal();
     }
 
-    private void AfterClearingEffects()
+    // ─────────────────────────────────────────────────────────
+    //  Effect Chain Coroutine
+    // ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Processes queued Fire-chain clears, Lightning charges, and cascading full-line
+    /// detections one step at a time, with chainStepDelay between each visual step.
+    /// This makes reactions readable and satisfying instead of instant.
+    /// </summary>
+    private IEnumerator EffectChainRoutine()
     {
-        // Use a while loop to handle cascading lightning effects.
-        // This ensures that if a randomly cleared cell is ALSO a lightning block,
-        // its charge is added and then consumed in the same clearing cycle.
-        while (lightningCount > 0)
+        const int safetyLimit = 300; // prevent infinite chains from malformed data
+        int steps = 0;
+
+        while (steps < safetyLimit)
         {
-            lightningCount--; // Consume one charge before clearing
-            ClearRandomCell();
+            // 1. Check if there's anything to process
+            bool hasClears    = pendingClears.Count > 0;
+            bool hasLightning = lightningCount > 0;
+            bool hasNewLines  = false;
+
+            if (!hasClears && !hasLightning)
+            {
+                // Nothing queued; check if fire caused new full lines
+                hasNewLines = ClearNewlyFullLines();
+                if (!hasNewLines) break; // truly nothing left
+            }
+
+            // 2. Wait so the player can see the previous step's animation
+            yield return new WaitForSeconds(chainStepDelay);
+            steps++;
+
+            // 3. Process one step
+            if (lightningCount > 0)
+            {
+                // Fire one lightning strike
+                lightningCount--;
+                var target = PickRandomOccupied();
+                if (target.HasValue)
+                    ExecuteCellClear(target.Value.y, target.Value.x);
+            }
+            else if (pendingClears.Count > 0)
+            {
+                // Process one deferred Fire / element clear
+                var pos = pendingClears.Dequeue();
+                ExecuteCellClear(pos.y, pos.x); // may enqueue more into pendingClears
+            }
+            else
+            {
+                // New lines were found and cleared by ClearNewlyFullLines above;
+                // effects from those clears will be in pendingClears now
+                SoundManager.Instance?.PlayLineClear(1);
+            }
         }
     }
 
-    private void ClearRandomCell()
+    /// <summary>Pick a random occupied cell for lightning. Returns null if board is empty.</summary>
+    private Vector2Int? PickRandomOccupied()
     {
         var candidates = new List<Vector2Int>();
         for (int rr = 0; rr < Size; rr++)
-        {
             for (int cc = 0; cc < Size; cc++)
-            {
                 if (data[rr, cc] == 2)
-                {
                     candidates.Add(new Vector2Int(cc, rr));
+        if (candidates.Count == 0) return null;
+        return candidates[Random.Range(0, candidates.Count)];
+    }
+
+    /// <summary>
+    /// Scans the entire board for full rows/columns not already in the current clear lists.
+    /// Clears them if found. Returns true if any new lines were cleared.
+    /// Effects caused by cells in these lines go to pendingClears for deferred processing.
+    /// </summary>
+    private bool ClearNewlyFullLines()
+    {
+        var newCols = new List<int>();
+        var newRows = new List<int>();
+
+        for (int c = 0; c < Size; c++)
+        {
+            if (fullLineColumns.Contains(c)) continue;
+            bool full = true;
+            for (int r = 0; r < Size; r++)
+                if (data[r, c] != 2) { full = false; break; }
+            if (full) newCols.Add(c);
+        }
+        for (int r = 0; r < Size; r++)
+        {
+            if (fullLineRows.Contains(r)) continue;
+            bool full = true;
+            for (int c = 0; c < Size; c++)
+                if (data[r, c] != 2) { full = false; break; }
+            if (full) newRows.Add(r);
+        }
+
+        if (newCols.Count == 0 && newRows.Count == 0) return false;
+
+        fullLineColumns.AddRange(newCols);
+        fullLineRows.AddRange(newRows);
+
+        isClearingLine = true;
+        foreach (int c in newCols)
+        {
+            ScoreManager.Instance.AddScore(40);
+            ScreenShake.Instance?.Shake(0.20f, 0.14f);
+            ParticleBurst.Instance?.LineClearBurst(cells[Size / 2, c].transform.position, Color.white);
+            for (int r = 0; r < Size; r++)
+            {
+                cells[r, c].PlayClearAnimation(r * 0.03f);
+                if (data[r, c] == 2)
+                {
+                    var ed = elementRegistry.GetElementData(elements[r, c]);
+                    data[r, c] = 0; elements[r, c] = Element.Normal;
+                    ed?.Effect?.ExecuteEffect(this, new Vector2Int(c, r));
+                    if (data[r, c] != 0) cells[r, c].Normal();
                 }
             }
         }
-        if (candidates.Count == 0) return;
-        var choice = candidates[Random.Range(0, candidates.Count)];
-        HandleCellClear(choice.y, choice.x);
+        foreach (int r in newRows)
+        {
+            ScoreManager.Instance.AddScore(40);
+            ScreenShake.Instance?.Shake(0.20f, 0.14f);
+            ParticleBurst.Instance?.LineClearBurst(cells[r, Size / 2].transform.position, Color.white);
+            for (int c = 0; c < Size; c++)
+            {
+                cells[r, c].PlayClearAnimation(c * 0.03f);
+                if (data[r, c] == 2)
+                {
+                    var ed = elementRegistry.GetElementData(elements[r, c]);
+                    data[r, c] = 0; elements[r, c] = Element.Normal;
+                    ed?.Effect?.ExecuteEffect(this, new Vector2Int(c, r));
+                    if (data[r, c] != 0) cells[r, c].Normal();
+                }
+            }
+        }
+        isClearingLine = false;
+
+        return true;
     }
     private void Highlight(Vector2Int point, int polyominoColumns, int polyominoRows)
     {

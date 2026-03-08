@@ -41,13 +41,27 @@ public class Cell : MonoBehaviour
         ApplyElementColor();
     }
 
-    public void Hover()
+    public void Hover(ElementData hoverElementData = null)
     {
         CancelJuice();
         gameObject.SetActive(true);
-        SetSprite(false);
-        var color = (currentElementData != null) ? currentElementData.ElementColor : Color.white;
-        spriteRenderer.color = new Color(color.r, color.g, color.b, 0.5f);
+        // Show the ghost using the DRAGGED block's element, not whatever was here before
+        var displayData = hoverElementData;
+        Sprite hoverSprite = (displayData?.NormalSprite) ?? defaultNormal;
+        spriteRenderer.sprite = hoverSprite;
+        var baseColor = (displayData != null) ? displayData.ElementColor : Color.white;
+        spriteRenderer.color = new Color(baseColor.r, baseColor.g, baseColor.b, 0.45f);
+    }
+
+    /// <summary>Called by UnHover: hides and clears any stale element state so the
+    /// next hover on this cell doesn't bleed the old element's visuals.</summary>
+    public void HoverReset()
+    {
+        CancelJuice();
+        gameObject.SetActive(false);
+        // Clear element so stale sprite/color can't leak into the next Hover call
+        ElementType = Element.Normal;
+        currentElementData = null;
     }
 
     public void Hide()

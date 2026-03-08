@@ -109,7 +109,7 @@ public class Block : MonoBehaviour
             pickupJuice = JuiceManager.Instance.PunchScale(transform, 0.25f, 0.18f);
 
         currentDragPoint = Vector2Int.RoundToInt((Vector2)transform.position - center);
-        board.Hover(currentDragPoint, polyominoIndex);
+        board.Hover(currentDragPoint, polyominoIndex, elementMap);
         Highlight(board.HighlightPolyominoColumns, board.HighlightPolyominoRows);
 
         previousDragPoint = currentDragPoint;
@@ -129,7 +129,7 @@ public class Block : MonoBehaviour
             if (currentDragPoint != previousDragPoint)
             {
                 previousDragPoint = currentDragPoint;
-                board.Hover(currentDragPoint, polyominoIndex);
+                board.Hover(currentDragPoint, polyominoIndex, elementMap);
                 Highlight(board.HighlightPolyominoColumns, board.HighlightPolyominoRows);
             }
         }

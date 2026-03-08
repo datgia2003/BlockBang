@@ -62,6 +62,26 @@ public static class ProceduralAudio
                  waveform: Waveform.Sine, attack: 0.002f, decay: 0.058f,
                  volume: 0.25f);
 
+    // ─── Element-specific SFX ───────────────────────────────
+
+    /// <summary>Fire explosion — low noise boom with pitch drop.</summary>
+    public static AudioClip FireExplode()
+        => Synth("fire_explode", duration: 0.30f, startFreq: 220f, endFreq: 60f,
+                 waveform: Waveform.Noise, attack: 0.005f, decay: 0.295f,
+                 volume: 0.65f, noiseAmount: 0.75f);
+
+    /// <summary>Ice shatter — triangle wave crackling high.</summary>
+    public static AudioClip IceShatter()
+        => Synth("ice_shatter", duration: 0.22f, startFreq: 1400f, endFreq: 500f,
+                 waveform: Waveform.Triangle, attack: 0.005f, decay: 0.215f,
+                 volume: 0.55f, harmonics: true);
+
+    /// <summary>Lightning strike — fast electric zap.</summary>
+    public static AudioClip LightningStrike()
+        => Synth("lightning_strike", duration: 0.18f, startFreq: 800f, endFreq: 200f,
+                 waveform: Waveform.Square, attack: 0.003f, decay: 0.177f,
+                 volume: 0.60f, noiseAmount: 0.4f);
+
     // ─────────────────────────────────────────────────────────
     // Core synthesizer
     // ─────────────────────────────────────────────────────────

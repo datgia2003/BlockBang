@@ -30,6 +30,10 @@ public class SoundManager : MonoBehaviour
         CellClear,
         GameOver,
         ScoreTick,
+        // Element-specific
+        FireExplode,
+        IceShatter,
+        LightningStrike,
     }
 
     private AudioClip[] clips;
@@ -66,6 +70,9 @@ public class SoundManager : MonoBehaviour
         clips[(int)SFX.CellClear]       = ProceduralAudio.CellClear();
         clips[(int)SFX.GameOver]        = ProceduralAudio.GameOver();
         clips[(int)SFX.ScoreTick]       = ProceduralAudio.ScoreTick();
+        clips[(int)SFX.FireExplode]     = ProceduralAudio.FireExplode();
+        clips[(int)SFX.IceShatter]      = ProceduralAudio.IceShatter();
+        clips[(int)SFX.LightningStrike] = ProceduralAudio.LightningStrike();
     }
 
     // ─────────────────────────────────────────────────────────

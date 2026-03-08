@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b4012913997374f4e8320738022cb8f0, type: 3}
   m_Name: LightningEffect
   m_EditorClassIdentifier: 
-  blocksToClear: 2
+  blocksToClear: 5
