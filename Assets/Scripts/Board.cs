@@ -19,6 +19,8 @@ public class Board : MonoBehaviour
     private readonly List<int> fullLineRows = new();
     private readonly List<int> highlightPolyominoColumns = new();
     private readonly List<int> highlightPolyominoRows = new();
+    // Buff 5: track occupied cells highlighted by 7-cell run prediction
+    private readonly List<Vector2Int> sevenCellHighlightedCells = new();
 
     private bool isClearingLine = false;
 
@@ -39,6 +41,10 @@ public class Board : MonoBehaviour
 
     /// <summary>True while ExecuteCellClear is running, so recursive Fire calls get deferred.</summary>
     private bool isRunningEffectChain = false;
+
+    /// <summary>True while EffectChainRoutine coroutine is active — blocks new block placement.</summary>
+    private bool isEffectChainActive = false;
+    public bool IsEffectChainActive => isEffectChainActive;
 
     void Start()
     {
@@ -220,6 +226,9 @@ public class Board : MonoBehaviour
     
     public bool Place(Vector2Int point, int polyominoIndex, Element[,] blockElements)
     {
+        // Don't allow placement while element reactions are still running
+        if (isEffectChainActive) return false;
+
         var polyomino = Polyominos.Get(polyominoIndex);
         var polyominoRows = polyomino.GetLength(0);
         var polyominoColumns = polyomino.GetLength(1);
@@ -287,6 +296,14 @@ public class Board : MonoBehaviour
         FullLineRows(point.y, point.y + polyominoRows);
         ClearFullLinesColumns(); // isClearingLine=true → effects enqueue into pendingClears
         ClearFullLinesRows();
+
+        // ── Buff 5: Clear hàng/cột có 7+ ô liền nhau ──────────
+        if (BuffManager.Instance != null && BuffManager.Instance.SevenCellClearEnabled)
+            ClearSevenCellRuns();
+
+        // ── Buff 6: Clear đường chéo chính board (đủ 8 ô) ───────
+        if (BuffManager.Instance != null && BuffManager.Instance.DiagonalClearEnabled)
+            ClearBoardDiagonals();
 
         // Play sound immediately for the direct line clears
         int totalCleared = fullLineColumns.Count + fullLineRows.Count;
@@ -480,6 +497,7 @@ public class Board : MonoBehaviour
     /// </summary>
     private IEnumerator EffectChainRoutine()
     {
+        isEffectChainActive = true;
         const int safetyLimit = 300; // prevent infinite chains from malformed data
         int steps = 0;
 
@@ -523,6 +541,8 @@ public class Board : MonoBehaviour
                 SoundManager.Instance?.PlayLineClear(1);
             }
         }
+
+        isEffectChainActive = false;
     }
 
     /// <summary>Pick a random occupied cell for lightning. Returns null if board is empty.</summary>
@@ -608,12 +628,307 @@ public class Board : MonoBehaviour
 
         return true;
     }
+
+    // ─────────────────────────────────────────────────────────
+    //  Buff 5: Seven-Cell Run Clear
+    // ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Clears any horizontal or vertical run of 7+ consecutive occupied cells.
+    /// Uses a 2-pass approach: first collect ALL cells to clear, then clear them.
+    /// This prevents horizontal clears from disrupting vertical run detection.
+    /// </summary>
+    private void ClearSevenCellRuns()
+    {
+        const int MinRun = 7;
+
+        // ── Pass 1: Collect all cells that belong to a 7+ run ──
+        var toClear = new System.Collections.Generic.HashSet<Vector2Int>();
+
+        // Horizontal runs
+        for (int r = 0; r < Size; r++)
+        {
+            int runStart = -1, runLen = 0;
+            for (int c = 0; c <= Size; c++)
+            {
+                bool occupied = c < Size && data[r, c] == 2;
+                if (occupied) { if (runLen == 0) runStart = c; runLen++; }
+                else
+                {
+                    if (runLen >= MinRun)
+                        for (int cc = runStart; cc < runStart + runLen; cc++)
+                            toClear.Add(new Vector2Int(cc, r));
+                    runLen = 0; runStart = -1;
+                }
+            }
+        }
+
+        // Vertical runs
+        for (int c = 0; c < Size; c++)
+        {
+            int runStart = -1, runLen = 0;
+            for (int r = 0; r <= Size; r++)
+            {
+                bool occupied = r < Size && data[r, c] == 2;
+                if (occupied) { if (runLen == 0) runStart = r; runLen++; }
+                else
+                {
+                    if (runLen >= MinRun)
+                        for (int rr = runStart; rr < runStart + runLen; rr++)
+                            toClear.Add(new Vector2Int(c, rr));
+                    runLen = 0; runStart = -1;
+                }
+            }
+        }
+
+        if (toClear.Count == 0) return;
+
+        // ── Pass 2: Clear all collected cells ──────────────────
+        isClearingLine = true;
+        ScoreManager.Instance.AddScore(5 * toClear.Count);
+        ScreenShake.Instance?.Shake(0.20f, 0.14f);
+
+        int i = 0;
+        foreach (var pos in toClear)
+        {
+            if (data[pos.y, pos.x] != 2) { i++; continue; }
+            var ed = elementRegistry.GetElementData(elements[pos.y, pos.x]);
+            cells[pos.y, pos.x].PlayClearAnimation(i * 0.025f);
+            data[pos.y, pos.x] = 0; elements[pos.y, pos.x] = Element.Normal;
+            ed?.Effect?.ExecuteEffect(this, pos);
+            if (data[pos.y, pos.x] != 0) cells[pos.y, pos.x].Normal();
+            i++;
+        }
+        isClearingLine = false;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  Buff 6: Diagonal Clear (2 đường chéo chính của board)
+    // ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// <summary>
+    /// Clears diagonal runs on the board.
+    /// Without SevenCellClear buff: only the 2 main full-board diagonals (8 cells).
+    /// With SevenCellClear buff: ALL diagonals with 7+ consecutive occupied cells.
+    /// </summary>
+    private void ClearBoardDiagonals()
+    {
+        bool sevenCellActive = BuffManager.Instance != null && BuffManager.Instance.SevenCellClearEnabled;
+        int minRun = sevenCellActive ? 7 : Size;
+
+        isClearingLine = true;
+        ClearDiagonalDirection(+1, minRun);
+        ClearDiagonalDirection(-1, minRun);
+        isClearingLine = false;
+    }
+
+    /// <summary>
+    /// Enumerates all diagonals in the given direction that could have length >= minRun,
+    /// and tries to clear qualifying runs within each.
+    /// </summary>
+    private void ClearDiagonalDirection(int colDir, int minRun)
+    {
+        // Diagonals from the top row (r=0), all columns
+        for (int c = 0; c < Size; c++)
+        {
+            int diagLen = colDir == +1 ? Size - c : c + 1;
+            if (diagLen >= minRun)
+                TryClearDiagonalRun(0, c, colDir, minRun);
+        }
+        // Diagonals from the left/right edge column (excluding r=0 — already covered above)
+        int edgeCol = colDir == +1 ? 0 : Size - 1;
+        for (int r = 1; r < Size; r++)
+        {
+            int diagLen = Size - r;
+            if (diagLen >= minRun)
+                TryClearDiagonalRun(r, edgeCol, colDir, minRun);
+        }
+    }
+
+    /// <summary>
+    /// Scans one diagonal for occupied runs >= minRun and clears them.
+    /// </summary>
+    private void TryClearDiagonalRun(int startRow, int startCol, int colDir, int minRun)
+    {
+        int diagLen = colDir == +1
+            ? Mathf.Min(Size - startRow, Size - startCol)
+            : Mathf.Min(Size - startRow, startCol + 1);
+
+        int runStart = -1, runLen = 0;
+        for (int i = 0; i <= diagLen; i++) // <= diagLen flushes the last run
+        {
+            bool occupied = i < diagLen && data[startRow + i, startCol + i * colDir] == 2;
+            if (occupied) { if (runLen == 0) runStart = i; runLen++; }
+            else
+            {
+                if (runLen >= minRun)
+                    ClearDiagonalSegment(startRow, startCol, colDir, runStart, runLen);
+                runLen = 0; runStart = -1;
+            }
+        }
+    }
+
+    private void ClearDiagonalSegment(int startRow, int startCol, int colDir, int segStart, int segLen)
+    {
+        ScoreManager.Instance.AddScore(40 * segLen / Size + 5 * segLen);
+        ScreenShake.Instance?.Shake(0.22f, 0.15f);
+
+        int midIdx = segStart + segLen / 2;
+        int midR = startRow + midIdx;
+        int midC = startCol + midIdx * colDir;
+        if (IsWithinBounds(midC, midR) && ParticleBurst.Instance != null)
+            ParticleBurst.Instance.LineClearBurst(cells[midR, midC].transform.position, Color.yellow);
+
+        for (int i = segStart; i < segStart + segLen; i++)
+        {
+            int r = startRow + i;
+            int c = startCol + i * colDir;
+            if (data[r, c] != 2) continue;
+            var ed = elementRegistry.GetElementData(elements[r, c]);
+            cells[r, c].PlayClearAnimation((i - segStart) * 0.03f);
+            data[r, c] = 0; elements[r, c] = Element.Normal;
+            ed?.Effect?.ExecuteEffect(this, new Vector2Int(c, r));
+            if (data[r, c] != 0) cells[r, c].Normal();
+        }
+    }
+
     private void Highlight(Vector2Int point, int polyominoColumns, int polyominoRows)
     {
         PredictFullLineColumns(point.x, point.x + polyominoColumns);
         PredictFullLineRows(point.y, point.y + polyominoRows);
         HighlightFullLinesColumns();
         HighlightFullLinesRows();
+
+        // Buff 5: highlight 7-cell runs that would be cleared on drop
+        if (BuffManager.Instance != null && BuffManager.Instance.SevenCellClearEnabled)
+            HighlightSevenCellPreview();
+
+        // Buff 6: highlight diagonal cells that would be cleared on drop
+        if (BuffManager.Instance != null && BuffManager.Instance.DiagonalClearEnabled)
+            HighlightDiagonalPreview();
+    }
+
+    /// <summary>
+    /// Scans rows and columns (treating hover cells = data 1 as "would-be occupied")
+    /// and highlights occupied cells that belong to a run of 7+ consecutive active cells.
+    /// </summary>
+    private void HighlightSevenCellPreview()
+    {
+        const int MinRun = 7;
+        sevenCellHighlightedCells.Clear();
+
+        // Horizontal
+        for (int r = 0; r < Size; r++)
+        {
+            int runStart = -1, runLen = 0;
+            for (int c = 0; c <= Size; c++)
+            {
+                bool active = c < Size && (data[r, c] == 1 || data[r, c] == 2);
+                if (active) { if (runLen == 0) runStart = c; runLen++; }
+                else
+                {
+                    if (runLen >= MinRun)
+                        for (int cc = runStart; cc < runStart + runLen; cc++)
+                            if (data[r, cc] == 2) { cells[r, cc].Highlight(); sevenCellHighlightedCells.Add(new Vector2Int(cc, r)); }
+                    runLen = 0; runStart = -1;
+                }
+            }
+        }
+
+        // Vertical
+        for (int c = 0; c < Size; c++)
+        {
+            int runStart = -1, runLen = 0;
+            for (int r = 0; r <= Size; r++)
+            {
+                bool active = r < Size && (data[r, c] == 1 || data[r, c] == 2);
+                if (active) { if (runLen == 0) runStart = r; runLen++; }
+                else
+                {
+                    if (runLen >= MinRun)
+                        for (int rr = runStart; rr < runStart + runLen; rr++)
+                            if (data[rr, c] == 2) { cells[rr, c].Highlight(); sevenCellHighlightedCells.Add(new Vector2Int(c, rr)); }
+                    runLen = 0; runStart = -1;
+                }
+            }
+        }
+    }
+
+    private void UnhighlightSevenCellPreview()
+    {
+        foreach (var pos in sevenCellHighlightedCells)
+            if (data[pos.y, pos.x] == 2)
+                cells[pos.y, pos.x].Normal();
+        sevenCellHighlightedCells.Clear();
+    }
+
+    /// <summary>
+    /// <summary>
+    /// Highlights diagonal cells that would be cleared on drop.
+    /// Without SevenCellClear buff: only the 2 main diagonals (need all 8 cells).
+    /// With SevenCellClear buff: ALL diagonals with 7+ hover+occupied cells.
+    /// </summary>
+    private void HighlightDiagonalPreview()
+    {
+        bool sevenCellActive = BuffManager.Instance != null && BuffManager.Instance.SevenCellClearEnabled;
+        int minRun = sevenCellActive ? 7 : Size;
+        PreviewDiagonalDirection(+1, minRun);
+        PreviewDiagonalDirection(-1, minRun);
+    }
+
+    private void PreviewDiagonalDirection(int colDir, int minRun)
+    {
+        // From top row
+        for (int c = 0; c < Size; c++)
+        {
+            int diagLen = colDir == +1 ? Size - c : c + 1;
+            if (diagLen >= minRun)
+                PreviewOneDiagonal(0, c, colDir, minRun);
+        }
+        // From left/right edge (excluding r=0)
+        int edgeCol = colDir == +1 ? 0 : Size - 1;
+        for (int r = 1; r < Size; r++)
+        {
+            int diagLen = Size - r;
+            if (diagLen >= minRun)
+                PreviewOneDiagonal(r, edgeCol, colDir, minRun);
+        }
+    }
+
+    /// <summary>
+    /// Scans one diagonal (hover+occupied = active), highlights occupied cells in qualifying runs.
+    /// </summary>
+    private void PreviewOneDiagonal(int startRow, int startCol, int colDir, int minRun)
+    {
+        int diagLen = colDir == +1
+            ? Mathf.Min(Size - startRow, Size - startCol)
+            : Mathf.Min(Size - startRow, startCol + 1);
+
+        int runStart = -1, runLen = 0;
+        for (int i = 0; i <= diagLen; i++)
+        {
+            bool active = i < diagLen &&
+                (data[startRow + i, startCol + i * colDir] == 1 ||
+                 data[startRow + i, startCol + i * colDir] == 2);
+
+            if (active) { if (runLen == 0) runStart = i; runLen++; }
+            else
+            {
+                if (runLen >= minRun)
+                    for (int j = runStart; j < runStart + runLen; j++)
+                    {
+                        int r = startRow + j;
+                        int c = startCol + j * colDir;
+                        if (data[r, c] == 2)
+                        {
+                            cells[r, c].Highlight();
+                            sevenCellHighlightedCells.Add(new Vector2Int(c, r));
+                        }
+                    }
+                runLen = 0; runStart = -1;
+            }
+        }
     }
     private void PredictFullLineColumns(int from, int to)
     {
@@ -721,6 +1036,7 @@ public class Board : MonoBehaviour
     {
         UnhighlightFullLinesColumns();
         UnhighlightFullLinesRows();
+        UnhighlightSevenCellPreview();
     }
     public List<int> HighlightPolyominoColumns => highlightPolyominoColumns;
     public List<int> HighlightPolyominoRows => highlightPolyominoRows;

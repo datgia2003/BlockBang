@@ -33,7 +33,9 @@ public abstract class Skill : ScriptableObject
         if (IsReady())
         {
             Execute();
-            currentCooldown = cooldown;
+            // Apply buff cooldown reduction
+            int reduction = BuffManager.Instance?.SkillCooldownReduction ?? 0;
+            currentCooldown = Mathf.Max(0, cooldown - reduction);
         }
     }
 

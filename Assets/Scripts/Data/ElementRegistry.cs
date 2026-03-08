@@ -44,32 +44,41 @@ public class ElementRegistry : ScriptableObject
     }
 
     /// <summary>
-    /// Chooses a random element based on their spawn chances.
-    /// The roll is against 1.0, so if the sum of all chances is less than 1.0,
-    /// there's a possibility of returning Element.Normal.
+    /// Chooses a random element based on their spawn chances,
+    /// adjusted by active buffs (Lightning/Fire rate up, Ice rate down).
     /// </summary>
     public Element ChooseRandomElement()
     {
         Initialize();
 
-        // Roll a random value between 0.0 and 1.0
+        // Gather buff modifiers
+        float lightningBonus = BuffManager.Instance?.LightningRateBonus ?? 0f;
+        float fireBonus      = BuffManager.Instance?.FireRateBonus      ?? 0f;
+        float iceReduction   = BuffManager.Instance?.IceRateReduction   ?? 0f;
+
         float roll = Random.value;
         float cumulativeChance = 0f;
 
         foreach (var elementData in Elements)
         {
-            // We only consider special elements for random selection
-            if (elementData.ElementType != Element.Normal)
-            {
-                cumulativeChance += elementData.SpawnChance;
-                if (roll < cumulativeChance)
-                {
-                    return elementData.ElementType;
-                }
-            }
+            if (elementData.ElementType == Element.Normal) continue;
+
+            float chance = elementData.SpawnChance;
+
+            // Apply buffs per element type
+            if (elementData.ElementType == Element.Lightning)
+                chance = Mathf.Max(0f, chance + lightningBonus);
+            else if (elementData.ElementType == Element.Fire)
+                chance = Mathf.Max(0f, chance + fireBonus);
+            else if (elementData.ElementType == Element.Ice)
+                chance = Mathf.Max(0f, chance - iceReduction);
+
+            cumulativeChance += chance;
+            if (roll < cumulativeChance)
+                return elementData.ElementType;
         }
 
-        // If the roll is higher than the sum of all spawn chances, no special element is chosen.
+        // If the roll exceeds cumulative chance → Normal element
         return Element.Normal;
     }
 }

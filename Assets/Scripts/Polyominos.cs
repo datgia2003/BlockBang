@@ -314,6 +314,21 @@ public static class Polyominos
             t1 = 0.05f; t2 = 0.15f; t3 = 0.40f; t4 = 0.40f;
         }
 
+        // Apply HardPieceRateDown buff: each level reduces t3+t4 by 5% total
+        // Reduction is split evenly between t3 and t4, and redistributed to t1+t2
+        float hardReduction = BuffManager.Instance?.HardPieceRateReduction ?? 0f;
+        if (hardReduction > 0f)
+        {
+            float reduce3 = Mathf.Min(t3, hardReduction * 0.5f);
+            float reduce4 = Mathf.Min(t4, hardReduction * 0.5f);
+            t3 -= reduce3;
+            t4 -= reduce4;
+            // Redistribute equally to t1 and t2
+            float gained = reduce3 + reduce4;
+            t1 += gained * 0.5f;
+            t2 += gained * 0.5f;
+        }
+
         float roll = Random.value;
         int chosenTier;
         if      (roll < t1)           chosenTier = 1;
