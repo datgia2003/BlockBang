@@ -8,6 +8,9 @@ public class IceEffect : ElementEffect
         // The Ice block "shatters" on first hit — becomes a Normal block.
         board.SetCellAsOccupied(position.x, position.y);
         board.SetElementAt(position.x, position.y, Element.Normal);
+        
+        // Punch scale the cell and pop block burst
+        board.PlayIceShatterAnim(position);
 
         // === VFX: ice shatter at this position ===
         var worldPos = board.GetCellWorldPosition(position.x, position.y);

@@ -42,8 +42,18 @@ public class ElementVFX : MonoBehaviour
     {
         foreach (var target in targetPositions)
             StartCoroutine(LightningArcRoutine(origin, target));
-        StartCoroutine(ScreenFlashRoutine(new Color(0.7f, 0.7f, 1f, 0.15f), 0.08f));
+        PlayLightningGlobalEffects();
+    }
+
+    /// <summary>VFX + SFX for lightning global visual context (screen flash + strike sound).</summary>
+    public void PlayLightningGlobalEffects()
+    {
+        StartCoroutine(ScreenFlashRoutine(new Color(0.7f, 0.7f, 1f, 0.25f), 0.1f));
         SoundManager.Instance?.Play(SoundManager.SFX.LightningStrike);
+        if (ScreenShake.Instance != null)
+        {
+            ScreenShake.Instance.Shake(0.28f, 0.12f); // Sharp electrical shake
+        }
     }
 
     /// <summary>Ice melt: drip particles (used when ice becomes normal).</summary>
@@ -84,40 +94,63 @@ public class ElementVFX : MonoBehaviour
 
     private IEnumerator IceShatterRoutine(Vector3 pos)
     {
-        // Shards: elongated thin particles in ice colours
-        int shardCount = 10;
+        // 1. Frost Nova Flash: Bright cyan burst that quickly scales up and dissipates
+        StartCoroutine(SpawnFlashAt(pos, new Color(0.4f, 0.9f, 1f, 0.8f), 0.35f));
+
+        // 2. High-speed thin shards
+        int shardCount = 20;
         for (int i = 0; i < shardCount; i++)
         {
-            float angle = (360f / shardCount) * i + Random.Range(-12f, 12f);
+            float angle = (360f / shardCount) * i + Random.Range(-20f, 20f);
             float rad = angle * Mathf.Deg2Rad;
             Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
-            float sp = Random.Range(3f, 6f);
-            Color iceTint = Color.Lerp(new Color(0.5f, 0.9f, 1f), Color.white, Random.value);
-            StartCoroutine(ShardRoutine(pos, dir * sp, iceTint, 0.45f, Random.Range(0.12f, 0.22f)));
+            float sp = Random.Range(6f, 12f);
+            Color iceTint = Color.Lerp(new Color(0.6f, 0.95f, 1f), Color.white, Random.value);
+            StartCoroutine(ShardRoutine(pos, dir * sp, iceTint, 0.5f, Random.Range(0.2f, 0.45f)));
         }
+
+        // 3. Heavy Ice Chunks: big, slower and falling heavily
+        int chunkCount = 6;
+        for (int i = 0; i < chunkCount; i++)
+        {
+            float rad = Random.Range(0f, Mathf.PI * 2f);
+            Vector2 dir = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+            float sp = Random.Range(2f, 5f);
+            Color chunkColor = new Color(0.4f, 0.8f, 1f, 0.9f);
+            StartCoroutine(SparkRoutine(pos, dir * sp + new Vector2(0, 2f), chunkColor, 0.6f, Random.Range(0.4f, 0.65f)));
+        }
+        
+        if (ScreenShake.Instance != null)
+        {
+            // Massive screen shake to emphasize heavy ice breaking
+            ScreenShake.Instance.Shake(0.25f, 0.16f);
+        }
+        
         yield break;
     }
 
     private IEnumerator FreezeRingRoutine(Vector3 pos)
     {
-        // Expanding ring drawn by LineRenderer
+        // Expanding ring drawn by LineRenderer - much wider and larger
         var go = new GameObject("FreezeRing");
         go.transform.position = pos;
         var lr = go.AddComponent<LineRenderer>();
-        ConfigureLineRenderer(lr, new Color(0.6f, 0.95f, 1f, 0.9f), 0.06f);
+        ConfigureLineRenderer(lr, new Color(0.5f, 0.95f, 1f, 1f), 0.12f); // Thicker ring
         lr.useWorldSpace = true;
 
-        float duration = 0.35f;
+        float duration = 0.45f;
         float elapsed  = 0f;
-        int segments   = 32;
+        int segments   = 40;
         lr.positionCount = segments + 1;
 
         while (elapsed < duration)
         {
             float t      = elapsed / duration;
-            float radius = Mathf.Lerp(0.1f, 1.4f, t);
-            float alpha  = Mathf.Lerp(0.9f, 0f, t);
-            lr.startColor = lr.endColor = new Color(0.6f, 0.95f, 1f, alpha);
+            // Eased expansion
+            float curvedT = 1f - Mathf.Pow(1f - t, 3f); 
+            float radius = Mathf.Lerp(0.1f, 2.5f, curvedT);
+            float alpha  = Mathf.Lerp(1.0f, 0f, t);
+            lr.startColor = lr.endColor = new Color(0.5f, 0.95f, 1f, alpha);
 
             for (int i = 0; i <= segments; i++)
             {
@@ -182,6 +215,74 @@ public class ElementVFX : MonoBehaviour
 
         // Tiny flash at target
         StartCoroutine(SpawnFlashAt(target, new Color(0.8f, 0.8f, 1f), 0.10f));
+    }
+
+    /// <summary>Creates a persistent arc that won't die until KillPersistentArc is called.</summary>
+    public GameObject SpawnPersistentLightningArc(Vector3 origin, Vector3 target)
+    {
+        var go = new GameObject("LightningArcPersistent");
+        var lr = go.AddComponent<LineRenderer>();
+        ConfigureLineRenderer(lr, new Color(0.85f, 0.85f, 1f, 1f), 0.05f);
+        lr.useWorldSpace = true;
+        lr.positionCount = 9; // 8 segments
+
+        StartCoroutine(PersistentLightningRoutine(go, lr, origin, target));
+        return go;
+    }
+
+    private IEnumerator PersistentLightningRoutine(GameObject go, LineRenderer lr, Vector3 origin, Vector3 target)
+    {
+        int segments = lr.positionCount - 1;
+        while (go != null && lr != null)
+        {
+            for (int i = 0; i <= segments; i++)
+            {
+                float frac = (float)i / segments;
+                Vector3 straight = Vector3.Lerp(origin, target, frac);
+                Vector3 perp = Vector3.Cross((target - origin).normalized, Vector3.forward);
+                float jitter = (i == 0 || i == segments) ? 0f : Random.Range(-0.25f, 0.25f);
+                lr.SetPosition(i, straight + perp * jitter);
+            }
+            yield return new WaitForSeconds(0.05f);
+        }
+    }
+
+    public void KillPersistentArc(GameObject go, float delay)
+    {
+        if (go != null)
+        {
+            var lr = go.GetComponent<LineRenderer>();
+            if (lr != null) lr.enabled = false; // Hide immediately
+
+            if (delay > 0f) Destroy(go, delay);
+            else Destroy(go);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  FIRE BURNING (SUSTAINED)
+    // ═══════════════════════════════════════════════════════════
+
+    public GameObject SpawnBurningVFX(Vector3 pos)
+    {
+        var go = new GameObject("BurningVFX");
+        go.transform.position = pos;
+        StartCoroutine(BurningRoutine(go));
+        return go;
+    }
+
+    private IEnumerator BurningRoutine(GameObject go)
+    {
+        Vector3 pos = go.transform.position;
+        while (go != null)
+        {
+            SpawnEmbers(pos, count: 3, speed: 3f, lifetime: 0.5f,
+                        colorA: new Color(1f, 0.45f, 0f), colorB: new Color(1f, 0.85f, 0.1f),
+                        size: 0.32f, gravity: -1.5f);
+            SpawnSmoke(pos, count: 1, speed: 1.5f, lifetime: 0.6f, 
+                       color: new Color(0.25f, 0.25f, 0.25f, 0.5f), size: 0.4f);
+            yield return new WaitForSeconds(0.1f);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

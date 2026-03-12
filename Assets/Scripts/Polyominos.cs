@@ -54,10 +54,20 @@ public static class Polyominos
             {1,1},
             {0,1},
         },
+        new int[,]
+        {
+            {1,0},
+            {0,1},
+        },
+        new int[,]
+        {
+            {0,1},
+            {1,0},
+        },
     };
 
     // ─────────────────────────────────────────────────────────
-    //  Tier 3  ─  4 cells  (tetrominoes, medium)
+    //  Tier 3  ─  3,4 cells  (tetrominoes, medium)
     // ─────────────────────────────────────────────────────────
     private static readonly int[][,] tier3 = new int[][,]
     {
@@ -134,6 +144,18 @@ public static class Polyominos
         {
             {1,1,1},
             {0,1,0},
+        },
+        new int[,]
+        {
+            {1,0,0},
+            {0,1,0},
+            {0,0,1},
+        },
+        new int[,]
+        {
+            {0,0,1},
+            {0,1,0},
+            {1,0,0},
         },
     };
 

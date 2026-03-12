@@ -24,9 +24,6 @@ public class Board : MonoBehaviour
 
     private bool isClearingLine = false;
 
-    // count lightning effects triggered by the current clear cycle
-    private int lightningCount = 0;
-
     // ── Effect Chain (queued, coroutine-driven) ───────────────
     [Header("Effect Chain")]
     [Tooltip("Seconds between each Fire chain / Lightning strike visual step.")]
@@ -35,16 +32,24 @@ public class Board : MonoBehaviour
     /// <summary>
     /// Queue of pending cell clears that should be processed one-by-one with a delay.
     /// Populated by HandleCellClear when called while a chain or line-clear is active.
-    /// Vector2Int stores (x=column, y=row).
     /// </summary>
-    private readonly Queue<Vector2Int> pendingClears = new();
+    private struct PendingClear
+    {
+        public Vector2Int Position;
+        public Element SourceElement;
+        public GameObject VfxHandle;
+    }
+    private readonly Queue<PendingClear> pendingClears = new();
 
     /// <summary>True while ExecuteCellClear is running, so recursive Fire calls get deferred.</summary>
     private bool isRunningEffectChain = false;
 
+    /// <summary>Counter for delayed operations that should paralyze the board (e.g. Fire's 2 second burn).</summary>
+    private int activeDelayedEffects = 0;
+
     /// <summary>True while EffectChainRoutine coroutine is active — blocks new block placement.</summary>
     private bool isEffectChainActive = false;
-    public bool IsEffectChainActive => isEffectChainActive;
+    public bool IsEffectChainActive => isEffectChainActive || activeDelayedEffects > 0;
 
     void Start()
     {
@@ -93,12 +98,36 @@ public class Board : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Adds a specified number of charges to the lightning counter. Used by LightningEffect.
-    /// </summary>
-    public void AddLightningCharges(int amount)
+    /// <summary>Plays a localized punch scale and particle burst when an ice block shatters to normal.</summary>
+    public void PlayIceShatterAnim(Vector2Int position)
     {
-        lightningCount += amount;
+        if (IsWithinBounds(position.x, position.y))
+        {
+            if (JuiceManager.Instance != null)
+                JuiceManager.Instance.PunchScale(cells[position.y, position.x].transform, 0.65f, 0.35f);
+            else
+                cells[position.y, position.x].PlayPunchScale();
+
+            var worldPos = cells[position.y, position.x].transform.position;
+            ParticleBurst.Instance?.PopBurst(worldPos, new Color(0.6f, 0.95f, 1f));
+        }
+    }
+
+    /// <summary>
+    /// Enqueues a lightning target directly to the pending clears instead of just adding charges.
+    /// </summary>
+    public void EnqueueLightningClear(Vector2Int target, GameObject arcHandle)
+    {
+        pendingClears.Enqueue(new PendingClear
+        {
+            Position = target,
+            SourceElement = Element.Lightning,
+            VfxHandle = arcHandle
+        });
+        
+        // Ensure chain routine runs if not active
+        if (!isEffectChainActive && !isClearingLine)
+            StartCoroutine(EffectChainRoutine());
     }
 
     /// <summary>
@@ -227,7 +256,7 @@ public class Board : MonoBehaviour
     public bool Place(Vector2Int point, int polyominoIndex, Element[,] blockElements)
     {
         // Don't allow placement while element reactions are still running
-        if (isEffectChainActive) return false;
+        if (IsEffectChainActive) return false;
 
         var polyomino = Polyominos.Get(polyominoIndex);
         var polyominoRows = polyomino.GetLength(0);
@@ -369,12 +398,13 @@ public class Board : MonoBehaviour
         isClearingLine = true;
         foreach (var c in fullLineColumns)
         {
+            var midWorld = cells[Size / 2, c].transform.position;
             ScoreManager.Instance.AddScore(40);
+            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
             if (ParticleBurst.Instance != null)
             {
-                var midWorld = cells[Size / 2, c].transform.position;
                 var colColor = cells[0, c].ElementType != Element.Normal
                     ? elementRegistry.GetElementData(cells[0, c].ElementType)?.ElementColor ?? Color.white
                     : Color.white;
@@ -404,12 +434,13 @@ public class Board : MonoBehaviour
         isClearingLine = true;
         foreach (var r in fullLineRows)
         {
+            var midWorld = cells[r, Size / 2].transform.position;
             ScoreManager.Instance.AddScore(40);
+            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
             if (ParticleBurst.Instance != null)
             {
-                var midWorld = cells[r, Size / 2].transform.position;
                 var rowColor = cells[r, 0].ElementType != Element.Normal
                     ? elementRegistry.GetElementData(cells[r, 0].ElementType)?.ElementColor ?? Color.white
                     : Color.white;
@@ -433,34 +464,118 @@ public class Board : MonoBehaviour
         isClearingLine = false;
     }
 
+    // ─────────────────────────────────────────────────────────
+    // Fire Delayed Clear (Burn 2s then destroy all at once)
+    // ─────────────────────────────────────────────────────────
+
+    public void StartFireDelayedClear(Vector2Int center)
+    {
+        StartCoroutine(FireDelayedClearRoutine(center));
+    }
+
+    private IEnumerator FireDelayedClearRoutine(Vector2Int center)
+    {
+        activeDelayedEffects++;
+        
+        List<System.Tuple<Vector2Int, GameObject>> targets = new();
+        
+        for (int dr = -1; dr <= 1; dr++)
+        {
+            for (int dc = -1; dc <= 1; dc++)
+            {
+                if (dr == 0 && dc == 0) continue;
+                int nr = center.y + dr;
+                int nc = center.x + dc;
+
+                if (IsWithinBounds(nc, nr) && data[nr, nc] == 2)
+                {
+                    var vfxObj = ElementVFX.Instance?.SpawnBurningVFX(GetCellWorldPosition(nc, nr));
+                    targets.Add(new (new Vector2Int(nc, nr), vfxObj));
+                }
+            }
+        }
+
+        if (targets.Count > 0)
+        {
+            // Wait for 1 second while burning
+            yield return new WaitForSeconds(1f);
+            
+            // Explode them ALL AT ONCE!
+            SoundManager.Instance?.Play(SoundManager.SFX.FireExplode);
+            if (ScreenShake.Instance != null)
+            {
+                ScreenShake.Instance.Shake(0.35f, 0.20f); // Massive fire shake
+            }
+            
+            foreach (var t in targets)
+            {
+                if (t.Item2 != null) Destroy(t.Item2); // stop sustained burn
+                // Cell clear logic (ExecuteCellClear will internally spawn the FireBurst via ElementVFX)
+                ExecuteCellClear(t.Item1.y, t.Item1.x, Element.Fire, null);
+            }
+            
+            if (!isEffectChainActive && pendingClears.Count > 0)
+            {
+                StartCoroutine(EffectChainRoutine());
+            }
+        }
+
+        activeDelayedEffects--;
+    }
+
     /// <summary>
     /// Entry point for all element-triggered cell clears.
     /// When called while a line-clear or effect-chain is active, defers to the queue.
     /// Otherwise executes immediately and starts the chain coroutine.
     /// </summary>
-    public void HandleCellClear(int r, int c)
+    public void HandleCellClear(int r, int c, Element sourceElement = Element.Normal)
     {
         if (data[r, c] != 2) return;
 
         // Defer: we're inside a line-clear loop or an active chain step → enqueue
         if (isClearingLine || isRunningEffectChain)
         {
-            pendingClears.Enqueue(new Vector2Int(c, r));
+            pendingClears.Enqueue(new PendingClear { Position = new Vector2Int(c, r), SourceElement = sourceElement });
             return;
         }
 
         // Called outside any chain context: execute and let the chain coroutine handle follow-ups
-        ExecuteCellClear(r, c);
+        ExecuteCellClear(r, c, sourceElement, null);
+        
+        if (!isEffectChainActive)
+        {
+            StartCoroutine(EffectChainRoutine());
+        }
     }
 
     /// <summary>
     /// Actual clear logic. Sets data=0, plays VFX/sound, executes element effect.
     /// Wraps the effect call in isRunningEffectChain so Fire's recursive calls are deferred.
     /// </summary>
-    private void ExecuteCellClear(int r, int c)
+    private void ExecuteCellClear(int r, int c, Element sourceElement = Element.Normal, GameObject vfxHandle = null)
     {
-        if (data[r, c] != 2) return;
-        if (!isClearingLine) ScoreManager.Instance.AddScore(5);
+        if (data[r, c] != 2) 
+        {
+            if (vfxHandle != null) ElementVFX.Instance?.KillPersistentArc(vfxHandle, 0f);
+            return;
+        }
+
+        if (vfxHandle != null && sourceElement == Element.Lightning)
+        {
+            // 0.24f matches FlashAndClear length (0.06 flash + 0.18 shrink)
+            ElementVFX.Instance?.KillPersistentArc(vfxHandle, 0.24f);
+        }
+
+        if (sourceElement == Element.Fire)
+        {
+            ElementVFX.Instance?.PlayFireVFX(cells[r, c].transform.position);
+        }
+
+        if (!isClearingLine) 
+        {
+            ScoreManager.Instance.AddScore(5);
+            ScorePopup.Create(cells[r, c].transform.position, 5, UnityEngine.Random.Range(0, 3));
+        }
         var elemType    = elements[r, c];
         var elementData = elementRegistry.GetElementData(elemType);
 
@@ -470,9 +585,15 @@ public class Board : MonoBehaviour
         if (!isClearingLine)
             SoundManager.Instance?.Play(SoundManager.SFX.CellClear);
 
-        if (ParticleBurst.Instance != null)
+        if (ParticleBurst.Instance != null && sourceElement != Element.Fire) // Minimize overlapping effects
             ParticleBurst.Instance.PopBurst(cells[r, c].transform.position,
                 elementData?.ElementColor ?? Color.white);
+        else if (ParticleBurst.Instance != null && sourceElement == Element.Fire)
+        {
+             ParticleBurst.Instance.PopBurst(cells[r, c].transform.position,
+                 elementData?.ElementColor ?? Color.white);
+        }
+
         cells[r, c].PlayClearAnimation(0f);
 
         if (elementData?.Effect != null)
@@ -505,10 +626,9 @@ public class Board : MonoBehaviour
         {
             // 1. Check if there's anything to process
             bool hasClears    = pendingClears.Count > 0;
-            bool hasLightning = lightningCount > 0;
             bool hasNewLines  = false;
 
-            if (!hasClears && !hasLightning)
+            if (!hasClears)
             {
                 // Nothing queued; check if fire caused new full lines
                 hasNewLines = ClearNewlyFullLines();
@@ -520,19 +640,11 @@ public class Board : MonoBehaviour
             steps++;
 
             // 3. Process one step
-            if (lightningCount > 0)
+            if (pendingClears.Count > 0)
             {
-                // Fire one lightning strike
-                lightningCount--;
-                var target = PickRandomOccupied();
-                if (target.HasValue)
-                    ExecuteCellClear(target.Value.y, target.Value.x);
-            }
-            else if (pendingClears.Count > 0)
-            {
-                // Process one deferred Fire / element clear
-                var pos = pendingClears.Dequeue();
-                ExecuteCellClear(pos.y, pos.x); // may enqueue more into pendingClears
+                // Process one deferred Fire / element / lightning clear
+                var p = pendingClears.Dequeue();
+                ExecuteCellClear(p.Position.y, p.Position.x, p.SourceElement, p.VfxHandle); // may enqueue more into pendingClears
             }
             else
             {
@@ -545,17 +657,8 @@ public class Board : MonoBehaviour
         isEffectChainActive = false;
     }
 
-    /// <summary>Pick a random occupied cell for lightning. Returns null if board is empty.</summary>
-    private Vector2Int? PickRandomOccupied()
-    {
-        var candidates = new List<Vector2Int>();
-        for (int rr = 0; rr < Size; rr++)
-            for (int cc = 0; cc < Size; cc++)
-                if (data[rr, cc] == 2)
-                    candidates.Add(new Vector2Int(cc, rr));
-        if (candidates.Count == 0) return null;
-        return candidates[Random.Range(0, candidates.Count)];
-    }
+    // PickRandomOccupied is now unused because Lightning tracks peeked targets directly
+
 
     /// <summary>
     /// Scans the entire board for full rows/columns not already in the current clear lists.
@@ -592,7 +695,9 @@ public class Board : MonoBehaviour
         isClearingLine = true;
         foreach (int c in newCols)
         {
+            var midWorld = cells[Size / 2, c].transform.position;
             ScoreManager.Instance.AddScore(40);
+            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
             ParticleBurst.Instance?.LineClearBurst(cells[Size / 2, c].transform.position, Color.white);
             for (int r = 0; r < Size; r++)
@@ -609,7 +714,9 @@ public class Board : MonoBehaviour
         }
         foreach (int r in newRows)
         {
+            var midWorld = cells[r, Size / 2].transform.position;
             ScoreManager.Instance.AddScore(40);
+            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
             ParticleBurst.Instance?.LineClearBurst(cells[r, Size / 2].transform.position, Color.white);
             for (int c = 0; c < Size; c++)
@@ -685,7 +792,16 @@ public class Board : MonoBehaviour
 
         // ── Pass 2: Clear all collected cells ──────────────────
         isClearingLine = true;
-        ScoreManager.Instance.AddScore(5 * toClear.Count);
+        int totalScore = 5 * toClear.Count;
+        ScoreManager.Instance.AddScore(totalScore);
+        
+        if (toClear.Count > 0)
+        {
+            var elem = System.Linq.Enumerable.ElementAt(toClear, toClear.Count / 2);
+            var midWorld = cells[elem.y, elem.x].transform.position;
+            ScorePopup.Create(midWorld, totalScore, UnityEngine.Random.Range(0, 3));
+        }
+        
         ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
         int i = 0;
@@ -771,14 +887,21 @@ public class Board : MonoBehaviour
 
     private void ClearDiagonalSegment(int startRow, int startCol, int colDir, int segStart, int segLen)
     {
-        ScoreManager.Instance.AddScore(40 * segLen / Size + 5 * segLen);
-        ScreenShake.Instance?.Shake(0.22f, 0.15f);
+        int totalScore = 40 * segLen / Size + 5 * segLen;
+        ScoreManager.Instance.AddScore(totalScore);
 
         int midIdx = segStart + segLen / 2;
         int midR = startRow + midIdx;
         int midC = startCol + midIdx * colDir;
-        if (IsWithinBounds(midC, midR) && ParticleBurst.Instance != null)
-            ParticleBurst.Instance.LineClearBurst(cells[midR, midC].transform.position, Color.yellow);
+        if (IsWithinBounds(midC, midR))
+        {
+            var midWorld = cells[midR, midC].transform.position;
+            ScorePopup.Create(midWorld, totalScore, UnityEngine.Random.Range(0, 3));
+            if (ParticleBurst.Instance != null)
+                ParticleBurst.Instance.LineClearBurst(cells[midR, midC].transform.position, Color.yellow);
+        }
+
+        ScreenShake.Instance?.Shake(0.22f, 0.15f);
 
         for (int i = segStart; i < segStart + segLen; i++)
         {

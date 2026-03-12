@@ -17,12 +17,19 @@ public class Blocks : MonoBehaviour
     private int[] polyominoIndexes;
     private int blockCount = 0;
     private bool isGameOver = false;
+    private bool pendingGameOverCheck = false;
 
     // ─────────────────────────────────────────────────────────
     void Update()
     {
         if (isGameOver && Input.GetMouseButtonDown(0))
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+
+        if (pendingGameOverCheck && !board.IsEffectChainActive)
+        {
+            pendingGameOverCheck = false;
+            CheckGameOver();
+        }
     }
 
     void Start()
@@ -61,8 +68,8 @@ public class Blocks : MonoBehaviour
         }
 
         // Check if even the new batch has no valid placements
-        // (can happen if board is nearly full and all retries failed)
-        CheckGameOver();
+        // (deferred until board chain effects are done)
+        pendingGameOverCheck = true;
     }
 
     public void Remove()
@@ -72,10 +79,10 @@ public class Blocks : MonoBehaviour
         {
             blockCount = 0;
             GenerateNewBlocks();
-            // GenerateNewBlocks already calls CheckGameOver at the end
+            // GenerateNewBlocks already queues the game over check at the end
             return;
         }
-        CheckGameOver();
+        pendingGameOverCheck = true;
     }
 
     public void ResetSortingOrder()

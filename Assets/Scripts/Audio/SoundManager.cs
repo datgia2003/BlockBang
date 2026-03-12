@@ -14,6 +14,7 @@ public class SoundManager : MonoBehaviour
     [Header("Volume")]
     [Range(0f, 1f)] [SerializeField] private float masterVolume = 1f;
     [Range(0f, 1f)] [SerializeField] private float sfxVolume    = 1f;
+    [Range(0f, 1f)] [SerializeField] private float bgmVolume    = 0.65f;
 
     [Header("Pooling")]
     [Tooltip("Number of AudioSource components to pool (allows overlapping sounds).")]
@@ -40,6 +41,10 @@ public class SoundManager : MonoBehaviour
     private AudioSource[] pool;
     private int poolIndex = 0;
 
+    private AudioSource bgmSource;
+    private int currentMusicLevel = -1;
+    private int randomMusicSeed; // Randomize start seed per game session
+
     // ─────────────────────────────────────────────────────────
     void Awake()
     {
@@ -49,6 +54,14 @@ public class SoundManager : MonoBehaviour
 
     void Start()
     {
+        randomMusicSeed = Random.Range(0, 10000);
+
+        // Build BGM Source
+        bgmSource = gameObject.AddComponent<AudioSource>();
+        bgmSource.loop = true;
+        bgmSource.playOnAwake = false;
+        bgmSource.volume = masterVolume * bgmVolume;
+
         // Build audio pool
         pool = new AudioSource[sourcePoolSize];
         for (int i = 0; i < sourcePoolSize; i++)
@@ -73,6 +86,8 @@ public class SoundManager : MonoBehaviour
         clips[(int)SFX.FireExplode]     = ProceduralAudio.FireExplode();
         clips[(int)SFX.IceShatter]      = ProceduralAudio.IceShatter();
         clips[(int)SFX.LightningStrike] = ProceduralAudio.LightningStrike();
+
+        ChangeMusicLevel(0);
     }
 
     // ─────────────────────────────────────────────────────────
@@ -96,6 +111,46 @@ public class SoundManager : MonoBehaviour
     public void PlayLineClear(int lineCount)
     {
         Play(lineCount >= 2 ? SFX.MultiLineClear : SFX.LineClear);
+    }
+
+    /// <summary>Changes BGM based on score milestones.</summary>
+    public void ChangeMusicLevel(int level)
+    {
+        if (currentMusicLevel == level) return;
+        currentMusicLevel = level;
+        StopAllCoroutines();
+        StartCoroutine(CrossfadeMusic(level));
+    }
+
+    private System.Collections.IEnumerator CrossfadeMusic(int level)
+    {
+        float fadeTime = 1.0f;
+
+        // 1. Fade out current track
+        if (bgmSource.isPlaying)
+        {
+            float startVol = bgmSource.volume;
+            for (float t = 0; t < fadeTime; t += Time.deltaTime)
+            {
+                bgmSource.volume = Mathf.Lerp(startVol, 0f, t / fadeTime);
+                yield return null;
+            }
+        }
+
+        // Generate track synchronously (takes ~15ms)
+        AudioClip nextBGM = MusicGenerator.GenerateLoop(randomMusicSeed + level);
+        
+        bgmSource.clip = nextBGM;
+        bgmSource.Play();
+
+        // 2. Fade in new track
+        float targetVol = masterVolume * bgmVolume;
+        for (float t = 0; t < fadeTime; t += Time.deltaTime)
+        {
+            bgmSource.volume = Mathf.Lerp(0f, targetVol, t / fadeTime);
+            yield return null;
+        }
+        bgmSource.volume = targetVol;
     }
 
     // ─────────────────────────────────────────────────────────

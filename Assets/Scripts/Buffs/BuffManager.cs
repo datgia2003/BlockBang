@@ -20,9 +20,9 @@ public class BuffManager : MonoBehaviour
     [SerializeField] private BuffSelectionUI buffSelectionUI;
 
     // ── Milestone progression ──────────────────────────────────
-    // Sequence: 100, 200, 400, 800, 1600, …  (xn = xn-1 * 2)
+    // Sequence: 50, 88, 154, 270, 472, 826, 1445, 2529, 4426, 7745, 13554, 23719, 41508, 72639, 127118, 222456, 389300, 681275, 1192231, 2086404, 3651207, 6390000
     private int currentMilestoneIndex = 0;
-    private int nextMilestoneScore    = 100;
+    private int nextMilestoneScore    = 50;
 
     // How many buffs are offered each time
     private const int OfferedCount = 3;
@@ -121,12 +121,12 @@ public class BuffManager : MonoBehaviour
     }
 
     // ── Milestone math ─────────────────────────────────────────
-    // n=0 → 100, n=1 → 200, n=2 → 400, n=3 → 800, …
+    // n=0 → 50, n=1 → 200, n=2 → 400, n=3 → 800, …
     private static int ComputeMilestone(int index)
     {
-        int v = 100;
+        int v = 50;
         for (int i = 0; i < index; i++)
-            v = (int)(v * 1.5f);
+            v = (int)(v * 1.75f);
         return v;
     }
 

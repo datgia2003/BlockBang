@@ -9,19 +9,7 @@ public class FireEffect : ElementEffect
         var worldPos = board.GetCellWorldPosition(position.x, position.y);
         ElementVFX.Instance?.PlayFireVFX(worldPos);
 
-        // Explode and clear all adjacent cells (including diagonals)
-        for (int dr = -1; dr <= 1; dr++)
-        {
-            for (int dc = -1; dc <= 1; dc++)
-            {
-                if (dr == 0 && dc == 0) continue;
-
-                int nr = position.y + dr;
-                int nc = position.x + dc;
-
-                if (board.IsWithinBounds(nc, nr))
-                    board.HandleCellClear(nr, nc);
-            }
-        }
+        // Instead of immediate loop clearing, enqueue a 2s burn routine in Board
+        board.StartFireDelayedClear(position);
     }
 }

@@ -66,21 +66,21 @@ public static class ProceduralAudio
 
     /// <summary>Fire explosion — low noise boom with pitch drop.</summary>
     public static AudioClip FireExplode()
-        => Synth("fire_explode", duration: 0.30f, startFreq: 220f, endFreq: 60f,
-                 waveform: Waveform.Noise, attack: 0.005f, decay: 0.295f,
-                 volume: 0.65f, noiseAmount: 0.75f);
+        => Synth("fire_explode", duration: 0.40f, startFreq: 280f, endFreq: 40f,
+                 waveform: Waveform.Noise, attack: 0.005f, decay: 0.395f,
+                 volume: 1.0f, noiseAmount: 0.95f);
 
-    /// <summary>Ice shatter — triangle wave crackling high.</summary>
+    /// <summary>Ice shatter — heavy crunch with bright high end.</summary>
     public static AudioClip IceShatter()
-        => Synth("ice_shatter", duration: 0.22f, startFreq: 1400f, endFreq: 500f,
-                 waveform: Waveform.Triangle, attack: 0.005f, decay: 0.215f,
-                 volume: 0.55f, harmonics: true);
+        => Synth("ice_shatter", duration: 0.35f, startFreq: 1600f, endFreq: 400f,
+                 waveform: Waveform.Triangle, attack: 0.005f, decay: 0.345f,
+                 volume: 0.9f, harmonics: true, noiseAmount: 0.15f);
 
-    /// <summary>Lightning strike — fast electric zap.</summary>
+    /// <summary>Lightning strike — fast electrical zap.</summary>
     public static AudioClip LightningStrike()
-        => Synth("lightning_strike", duration: 0.18f, startFreq: 800f, endFreq: 200f,
-                 waveform: Waveform.Square, attack: 0.003f, decay: 0.177f,
-                 volume: 0.60f, noiseAmount: 0.4f);
+        => Synth("lightning_strike", duration: 0.25f, startFreq: 1200f, endFreq: 150f,
+                 waveform: Waveform.Square, attack: 0.003f, decay: 0.247f,
+                 volume: 0.9f, noiseAmount: 0.6f);
 
     // ─────────────────────────────────────────────────────────
     // Core synthesizer
@@ -206,5 +206,150 @@ public static class ProceduralAudio
         var clip = AudioClip.Create(name, data.Length, 1, SampleRate, false);
         clip.SetData(data, 0);
         return clip;
+    }
+}
+
+public static class MusicGenerator
+{
+    private const int SampleRate = 44100;
+
+    /// <summary>
+    /// Generates a looping Chiptune-style music track procedurally.
+    /// Uses the given seed to ensure the song remains consistent for that track ID.
+    /// </summary>
+    public static AudioClip GenerateLoop(int seed)
+    {
+        UnityEngine.Random.InitState(seed);
+
+        // Musical parameters
+        float bpm = UnityEngine.Random.Range(100f, 150f);
+        float stepDur = 60f / bpm / 2f; // 8th notes
+        int steps = 32; // 4 bars of 4/4
+        float loopDur = steps * stepDur;
+
+        int samples = Mathf.CeilToInt(SampleRate * loopDur);
+        float[] mix = new float[samples];
+
+        // Scales (C Minor Pentatonic variations)
+        float[] minorScale = { 130.81f, 155.56f, 174.61f, 196.00f, 233.08f, 261.63f, 311.13f, 349.23f, 392.00f, 466.16f, 523.25f };
+        int root = UnityEngine.Random.Range(0, 5); // shift root
+
+        // --- Track 1: Kick Drum (4 on the floor or syncopated) ---
+        bool[] kickPattern = new bool[steps];
+        for (int i = 0; i < steps; i += 4) kickPattern[i] = true; 
+        if (UnityEngine.Random.value > 0.5f) kickPattern[10] = true;
+
+        for (int i = 0; i < steps; i++)
+        {
+            if (kickPattern[i])
+            {
+                AddSynth(mix, i * stepDur, 0.15f, 150f, 40f, 0f, 0.01f, 0.14f, 0.6f);
+            }
+        }
+
+        // --- Track 2: Bassline (16th note arps or bouncy) ---
+        int bassOffset = root;
+        bool[] bassActive = new bool[steps];
+        int[] bassNotes = new int[steps];
+        for (int i = 0; i < steps; i++)
+        {
+            if (UnityEngine.Random.value > 0.3f) 
+            {
+                bassActive[i] = true;
+                bassNotes[i] = bassOffset + UnityEngine.Random.Range(0, 4);
+                if (UnityEngine.Random.value > 0.8f) bassNotes[i] += 5; // jump octave
+            }
+        }
+
+        for (int i = 0; i < steps; i++)
+        {
+            if (bassActive[i])
+            {
+                float freq = minorScale[bassNotes[i] % minorScale.Length] * 0.5f; // pitch down
+                AddSynth(mix, i * stepDur, 0.15f, freq, freq, 1f, 0.02f, 0.12f, 0.4f); // Square wave
+            }
+        }
+
+        // --- Track 3: Lead/Arp ---
+        int leadOffset = root + 3;
+        int melodySpeed = UnityEngine.Random.Range(1, 3); // 1 = every 8th, 2 = every quarter
+        for (int i = 0; i < steps; i += melodySpeed)
+        {
+            if (UnityEngine.Random.value > 0.2f)
+            {
+                int noteIdx = leadOffset + UnityEngine.Random.Range(0, minorScale.Length - leadOffset);
+                float freq = minorScale[noteIdx % minorScale.Length] * 2f; // pitch up
+                float len = stepDur * UnityEngine.Random.Range(0.8f, 2.5f);
+                
+                // 30% chance for Triangle, 70% for Sine
+                float waveType = UnityEngine.Random.value > 0.3f ? 3f : 2f; 
+                
+                AddSynth(mix, i * stepDur, len, freq, freq, waveType, 0.05f, len * 0.8f, 0.2f);
+            }
+        }
+        
+        // --- Track 4: Hi-hats ---
+        for (int i = 0; i < steps; i++)
+        {
+            if (i % 2 != 0 || UnityEngine.Random.value > 0.7f) // Upbeats + random
+            {
+                AddSynth(mix, i * stepDur, 0.05f, 800f, 800f, 4f, 0.01f, 0.04f, 0.1f); // Noise
+            }
+        }
+
+        // Clamp & normalize
+        float maxVal = 0.01f;
+        for (int i = 0; i < mix.Length; i++) maxVal = Mathf.Max(maxVal, Mathf.Abs(mix[i]));
+        for (int i = 0; i < mix.Length; i++) mix[i] = Mathf.Clamp(mix[i] / maxVal * 0.8f, -1f, 1f); // leaves headroom
+
+        // Restore random context
+        UnityEngine.Random.InitState((int)System.DateTime.Now.Ticks);
+        
+        var clip = AudioClip.Create("OST_" + seed, mix.Length, 1, SampleRate, false);
+        clip.SetData(mix, 0);
+        return clip;
+    }
+
+    /// <summary>
+    /// waveType: 0=Noise (Drum), 1=Square(Bass), 2=Sine, 3=Triangle, 4=Noise
+    /// </summary>
+    private static void AddSynth(float[] mix, float startTime, float duration, 
+                                 float startFreq, float endFreq, float waveType, 
+                                 float attack, float decay, float volume)
+    {
+        int startSample = Mathf.FloorToInt(startTime * SampleRate);
+        int samples = Mathf.CeilToInt(duration * SampleRate);
+        
+        for (int i = 0; i < samples; i++)
+        {
+            int mixIdx = startSample + i;
+            if (mixIdx >= mix.Length) break; // wrap around could be done, but keeping it simple
+
+            float t = (float)i / SampleRate;
+            float prog = (float)i / samples;
+            float freq = Mathf.Lerp(startFreq, endFreq, prog);
+            float phase = t * freq;
+
+            float sample = 0f;
+            float frac = phase - Mathf.Floor(phase);
+
+            if (waveType == 0f || waveType == 4f) sample = UnityEngine.Random.Range(-1f, 1f); // Noise
+            else if (waveType == 1f) sample = frac < 0.5f ? 1f : -1f; // Square
+            else if (waveType == 2f) sample = Mathf.Sin(phase * 2f * Mathf.PI); // Sine
+            else if (waveType == 3f) sample = frac < 0.5f ? (4f * frac - 1f) : (3f - 4f * frac); // Tri
+
+            // Envelope
+            float amp = 1f;
+            float attProg = t / attack;
+            if (attProg < 1f) amp = attProg;
+            else 
+            {
+                float decProg = (t - attack) / decay;
+                if (decProg < 1f) amp = 1f - decProg;
+                else amp = 0f;
+            }
+
+            mix[mixIdx] += sample * amp * volume;
+        }
     }
 }

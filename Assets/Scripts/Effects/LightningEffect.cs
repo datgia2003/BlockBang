@@ -16,14 +16,22 @@ public class LightningEffect : ElementEffect
 
         if (targets.Count > 0 && ElementVFX.Instance != null)
         {
-            var targetPositions = new List<Vector3>(targets.Count);
             foreach (var t in targets)
-                targetPositions.Add(board.GetCellWorldPosition(t.x, t.y));
-
-            ElementVFX.Instance.PlayLightningVFX(origin, targetPositions);
+            {
+                var targetPos = board.GetCellWorldPosition(t.x, t.y);
+                var arcHandle = ElementVFX.Instance.SpawnPersistentLightningArc(origin, targetPos);
+                board.EnqueueLightningClear(t, arcHandle);
+            }
+            
+            // Screen flash + sound
+            ElementVFX.Instance.PlayLightningGlobalEffects();
         }
-
-        // Add lightning charges to the board counter (cells cleared separately)
-        board.AddLightningCharges(blocksToClear);
+        else if (targets.Count > 0)
+        {
+            foreach (var t in targets)
+            {
+                board.EnqueueLightningClear(t, null); // No VFX fallback
+            }
+        }
     }
 }
