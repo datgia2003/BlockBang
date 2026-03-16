@@ -82,6 +82,13 @@ public static class ProceduralAudio
                  waveform: Waveform.Square, attack: 0.003f, decay: 0.247f,
                  volume: 0.9f, noiseAmount: 0.6f);
 
+    /// <summary>Level complete — triumphant rising melody.</summary>
+    public static AudioClip LevelComplete()
+        => SynthChord("lvl_complete", duration: 0.8f,
+                      freqs: new[] { 523.25f, 659.25f, 783.99f }, endFreqMult: 1.2f, // C major chord rising
+                      waveform: Waveform.Sine, attack: 0.05f, decay: 0.75f,
+                      volume: 0.8f);
+
     // ─────────────────────────────────────────────────────────
     // Core synthesizer
     // ─────────────────────────────────────────────────────────

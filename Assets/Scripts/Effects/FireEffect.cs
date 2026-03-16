@@ -5,6 +5,8 @@ public class FireEffect : ElementEffect
 {
     public override void ExecuteEffect(Board board, Vector2Int position)
     {
+        LevelModeManager.Instance?.OnGoalProgress(LevelGoalType.TriggerFire, 1);
+        
         // === VFX: fire explosion at this cell ===
         var worldPos = board.GetCellWorldPosition(position.x, position.y);
         ElementVFX.Instance?.PlayFireVFX(worldPos);

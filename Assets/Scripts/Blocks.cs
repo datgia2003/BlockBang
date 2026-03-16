@@ -22,9 +22,6 @@ public class Blocks : MonoBehaviour
     // ─────────────────────────────────────────────────────────
     void Update()
     {
-        if (isGameOver && Input.GetMouseButtonDown(0))
-            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
-
         if (pendingGameOverCheck && !board.IsEffectChainActive)
         {
             pendingGameOverCheck = false;
@@ -57,31 +54,79 @@ public class Blocks : MonoBehaviour
         blockCount = 0;
         int currentScore = ScoreManager.Instance != null ? ScoreManager.Instance.Score : 0;
 
-        int[] chosen = GenerateSolvableBatch(currentScore);
+        var lvl = LevelModeManager.Instance;
+        bool usePool = lvl != null && lvl.IsLevelModeActive
+                       && lvl.CurrentLevel != null && lvl.CurrentLevel.HasSpawnPool;
 
-        for (int i = 0; i < blocks.Length; i++)
+        if (usePool)
         {
-            polyominoIndexes[i] = chosen[i];
-            blocks[i].gameObject.SetActive(true);
-            blocks[i].Show(polyominoIndexes[i]);
-            blockCount++;
+            // Draw from level pool; hide slots that have no block left
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                var drawn = lvl.DrawFromPool();
+                if (drawn.index < 0)
+                {
+                    // Pool exhausted — hide this slot
+                    blocks[i].gameObject.SetActive(false);
+                    polyominoIndexes[i] = -1;
+                }
+                else
+                {
+                    polyominoIndexes[i] = drawn.index;
+                    blocks[i].gameObject.SetActive(true);
+                    blocks[i].Show(polyominoIndexes[i], drawn.elements);
+                    blockCount++;
+                }
+            }
+
+            // If ALL slots are empty, trigger fail (no moves left)
+            if (blockCount == 0)
+            {
+                pendingGameOverCheck = true; // will trigger CheckGameOver → game over
+            }
+        }
+        else
+        {
+            // Endless / no-pool: normal difficulty-weighted random
+            int[] chosen = GenerateSolvableBatch(currentScore);
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                polyominoIndexes[i] = chosen[i];
+                blocks[i].gameObject.SetActive(true);
+                blocks[i].Show(polyominoIndexes[i]);
+                blockCount++;
+            }
         }
 
-        // Check if even the new batch has no valid placements
-        // (deferred until board chain effects are done)
         pendingGameOverCheck = true;
     }
 
     public void Remove()
     {
+        // Notify LevelModeManager of placement (before possible game over)
+        bool outOfMoves = LevelModeManager.Instance?.OnBlockPlaced() ?? false;
+
         blockCount--;
         if (blockCount <= 0)
         {
             blockCount = 0;
+
+            // If we're in level mode and out of moves, don't generate new blocks
+            // LevelModeManager.LevelFailed() will handle the screen
+            if (outOfMoves) return;
+
             GenerateNewBlocks();
-            // GenerateNewBlocks already queues the game over check at the end
             return;
         }
+
+        // If out of moves but there are still blocks in the current batch, hide them
+        if (outOfMoves)
+        {
+            for (int i = 0; i < blocks.Length; i++)
+                blocks[i].gameObject.SetActive(false);
+            return;
+        }
+
         pendingGameOverCheck = true;
     }
 
@@ -95,15 +140,6 @@ public class Blocks : MonoBehaviour
     //  Batch generation with solvability guarantee
     // ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Generates a set of polyomino indexes such that:
-    ///   1. Each piece is chosen from a difficulty tier appropriate to the current score.
-    ///   2. At least ONE piece in the batch can be placed somewhere on the current board.
-    ///      (We do NOT simulate placing all 3 simultaneously — that would be too restrictive.)
-    ///
-    /// If every random batch is unsolvable (board nearly full), we fall back to Tier-1
-    /// pieces on the last retry to prevent impossible situations.
-    /// </summary>
     private int[] GenerateSolvableBatch(int score)
     {
         int[] batch = new int[blocks.Length];
@@ -111,22 +147,18 @@ public class Blocks : MonoBehaviour
         for (int attempt = 0; attempt < maxSolvabilityRetries; attempt++)
         {
             bool forceTier1 = (attempt >= maxSolvabilityRetries - 3);
-
             for (int i = 0; i < blocks.Length; i++)
             {
                 batch[i] = forceTier1
                     ? Polyominos.RandomIndexFromTier(1)
                     : Polyominos.RandomIndexForScore(score);
             }
-
-            if (BatchIsSolvable(batch))
-                return batch;
+            if (BatchIsSolvable(batch)) return batch;
         }
 
-        // Absolute fallback: single-cell pieces always fit somewhere
+        // Absolute fallback
         for (int i = 0; i < blocks.Length; i++)
             batch[i] = Polyominos.RandomIndexFromTier(1);
-
         return batch;
     }
 

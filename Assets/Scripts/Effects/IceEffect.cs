@@ -5,6 +5,8 @@ public class IceEffect : ElementEffect
 {
     public override void ExecuteEffect(Board board, Vector2Int position)
     {
+        LevelModeManager.Instance?.OnGoalProgress(LevelGoalType.TriggerIce, 1);
+        
         // The Ice block "shatters" on first hit — becomes a Normal block.
         board.SetCellAsOccupied(position.x, position.y);
         board.SetElementAt(position.x, position.y, Element.Normal);

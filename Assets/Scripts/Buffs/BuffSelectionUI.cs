@@ -38,6 +38,10 @@ public class BuffSelectionUI : MonoBehaviour
 
     public void Show(List<BuffDefinition> offered)
     {
+        // Buff selection is disabled if we are in a level (even if already won/lost)
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.CurrentLevel != null)
+            return;
+
         panel.SetActive(true);
         Time.timeScale = 0f;
 

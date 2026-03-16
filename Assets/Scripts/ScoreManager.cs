@@ -31,8 +31,8 @@ public class ScoreManager : MonoBehaviour
 
     public void AddScore(int amount)
     {
-        // Apply score multiplier buff (if any)
-        if (BuffManager.Instance != null)
+        // Apply score multiplier buff (if any) - Disabled in Level Mode
+        if (BuffManager.Instance != null && (LevelModeManager.Instance == null || !LevelModeManager.Instance.IsLevelModeActive))
         {
             float mult = BuffManager.Instance.ScoreMultiplier;
             if (mult > 1f)
@@ -41,6 +41,8 @@ public class ScoreManager : MonoBehaviour
 
         score += amount;
         UpdateScoreText();
+
+        LevelModeManager.Instance?.OnGoalProgress(LevelGoalType.Score, amount);
 
         // Change background music per 500 points
         SoundManager.Instance?.ChangeMusicLevel(score / 500);

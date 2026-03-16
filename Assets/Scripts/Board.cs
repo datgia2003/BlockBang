@@ -62,6 +62,41 @@ public class Board : MonoBehaviour
                 cells[r, c].Hide();
             }
         }
+
+        // Check if we should start in level mode
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.IsLevelModeActive)
+        {
+            LoadLevel(LevelModeManager.Instance.CurrentLevel);
+        }
+    }
+
+    public void LoadLevel(LevelData levelData)
+    {
+        if (levelData == null) return;
+
+        for (int r = 0; r < Size; r++)
+        {
+            for (int c = 0; c < Size; c++)
+            {
+                int index = r * Size + c;
+                int cellData = levelData.InitialBoardData[index];
+                Element element = levelData.InitialElements[index];
+
+                data[r, c] = cellData;
+                elements[r, c] = element;
+
+                if (cellData == 2)
+                {
+                    var elementData = elementRegistry.GetElementData(element);
+                    cells[r, c].SetElement(element, elementData);
+                    cells[r, c].Normal();
+                }
+                else
+                {
+                    cells[r, c].Hide();
+                }
+            }
+        }
     }
 
     #region Public API for Effects
@@ -337,7 +372,26 @@ public class Board : MonoBehaviour
         // Play sound immediately for the direct line clears
         int totalCleared = fullLineColumns.Count + fullLineRows.Count;
         if (totalCleared > 0)
+        {
             SoundManager.Instance?.PlayLineClear(totalCleared);
+
+            // ── Level-mode goal reporting (strictly separated by type) ─────────
+            // Each goal type only counts what it says: columns count for ClearColumns,
+            // rows count for ClearRows. ClearLines counts ANY line (col or row).
+            if (LevelModeManager.Instance != null)
+            {
+                if (fullLineColumns.Count > 0)
+                {
+                    LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearColumns, fullLineColumns.Count);
+                    LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearLines,   fullLineColumns.Count);
+                }
+                if (fullLineRows.Count > 0)
+                {
+                    LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearRows,  fullLineRows.Count);
+                    LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearLines, fullLineRows.Count);
+                }
+            }
+        }
 
         // Process Fire chains, Lightning, and cascade full-lines with visual delays
         StartCoroutine(EffectChainRoutine());
@@ -691,6 +745,20 @@ public class Board : MonoBehaviour
 
         fullLineColumns.AddRange(newCols);
         fullLineRows.AddRange(newRows);
+
+        if (LevelModeManager.Instance != null)
+        {
+            if (newCols.Count > 0)
+            {
+                LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearColumns, newCols.Count);
+                LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearLines,   newCols.Count);
+            }
+            if (newRows.Count > 0)
+            {
+                LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearRows,  newRows.Count);
+                LevelModeManager.Instance.OnGoalProgress(LevelGoalType.ClearLines, newRows.Count);
+            }
+        }
 
         isClearingLine = true;
         foreach (int c in newCols)

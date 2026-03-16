@@ -34,6 +34,10 @@ public class SkillManager : MonoBehaviour
 
     public void OnBlockPlaced()
     {
+        // Skills are disabled in Level Mode
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.CurrentLevel != null)
+            return;
+
         foreach (var skill in skills)
         {
             skill.OnBlockPlaced();
@@ -42,6 +46,10 @@ public class SkillManager : MonoBehaviour
 
     public void ActivateSkill(int skillIndex)
     {
+        // Skills are disabled in Level Mode
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.CurrentLevel != null)
+            return;
+
         if (skillIndex >= 0 && skillIndex < skills.Count)
         {
             skills[skillIndex].Activate();
@@ -50,12 +58,14 @@ public class SkillManager : MonoBehaviour
 
     public bool AreAnySkillsReady()
     {
+        // Skills cannot rescue player in Level Mode
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.CurrentLevel != null)
+            return false;
+
         foreach (var skill in skills)
         {
             if (skill.IsReady())
-            {
                 return true;
-            }
         }
         return false;
     }

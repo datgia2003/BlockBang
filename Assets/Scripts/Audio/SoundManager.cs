@@ -35,6 +35,7 @@ public class SoundManager : MonoBehaviour
         FireExplode,
         IceShatter,
         LightningStrike,
+        LevelComplete,
     }
 
     private AudioClip[] clips;
@@ -86,6 +87,7 @@ public class SoundManager : MonoBehaviour
         clips[(int)SFX.FireExplode]     = ProceduralAudio.FireExplode();
         clips[(int)SFX.IceShatter]      = ProceduralAudio.IceShatter();
         clips[(int)SFX.LightningStrike] = ProceduralAudio.LightningStrike();
+        clips[(int)SFX.LevelComplete]   = ProceduralAudio.LevelComplete();
 
         ChangeMusicLevel(0);
     }

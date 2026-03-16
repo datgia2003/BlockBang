@@ -46,7 +46,7 @@ public class Block : MonoBehaviour
         scale = transform.localScale;
     }
 
-    public void Show(int polyominoIndex)
+    public void Show(int polyominoIndex, Element[] forcedElements = null)
     {
         this.polyominoIndex = polyominoIndex;
         Hide();
@@ -55,7 +55,7 @@ public class Block : MonoBehaviour
         var polyominoColumns = polyomino.GetLength(1);
         center = new UnityEngine.Vector2(polyominoColumns * 0.5f, polyominoRows * 0.5f);
 
-        // assign random elements for each block cell
+        // assign elements for each block cell
         for (var r = 0; r < polyominoRows; ++r)
         {
             for (var c = 0; c < polyominoColumns; ++c)
@@ -65,10 +65,20 @@ public class Block : MonoBehaviour
                 {
                     cells[r, c].transform.localPosition = new(c - center.x + 0.5f, r - center.y + 0.5f, 0.0f);
                     
-                    // Choose element type for this cell using the registry
-                    var elem = elementRegistry.ChooseRandomElement();
+                    // Choose element type:
+                    Element elem = Element.Normal;
+                    if (forcedElements != null && forcedElements.Length == 25)
+                    {
+                        elem = forcedElements[r * 5 + c];
+                    }
+                    
+                    // Only randomize if NOT in level mode and no specific element was forced
+                    if (elem == Element.Normal && (LevelModeManager.Instance == null || !LevelModeManager.Instance.IsLevelModeActive))
+                    {
+                        elem = elementRegistry.ChooseRandomElement();
+                    }
+
                     elementMap[r, c] = elem;
-                    // The visual update will be handled by Cell.cs, which now needs the registry
                     cells[r, c].SetElement(elem, elementRegistry.GetElementData(elem));
                     cells[r, c].Normal();
                 }

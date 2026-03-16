@@ -9,6 +9,8 @@ public class LightningEffect : ElementEffect
 
     public override void ExecuteEffect(Board board, Vector2Int position)
     {
+        LevelModeManager.Instance?.OnGoalProgress(LevelGoalType.TriggerLightning, 1);
+        
         // === VFX: lightning arc from this cell to future targets ===
         // We peek at what cells will be cleared (already occupied) and draw arcs.
         var origin = board.GetCellWorldPosition(position.x, position.y);

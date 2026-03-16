@@ -22,6 +22,13 @@ public class SkillUI : MonoBehaviour
             }
         }
 
+        // Hide skill UI entirely in Level Mode
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.CurrentLevel != null)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
         if (skillButton != null)
         {
             skillButton.onClick.AddListener(ActivateSkill);

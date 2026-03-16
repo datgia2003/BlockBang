@@ -33,46 +33,50 @@ public class BuffManager : MonoBehaviour
 
     // ── Public read-only accessors ─────────────────────────────
 
+    private bool IsBuffEnabled => LevelModeManager.Instance == null || LevelModeManager.Instance.CurrentLevel == null;
+
     public int GetBuffLevel(BuffType type)
     {
+        if (!IsBuffEnabled) return 0;
         buffLevels.TryGetValue(type, out int lvl);
         return lvl;
     }
 
-    public bool HasBuff(BuffType type) => GetBuffLevel(type) > 0;
+    public bool HasBuff(BuffType type) => IsBuffEnabled && GetBuffLevel(type) > 0;
 
     // ── Buff-specific value helpers ────────────────────────────
 
     /// <summary>Additive rate bonus for Lightning spawn (0 → +0.05 → +0.10 → +0.15).</summary>
-    public float LightningRateBonus    => GetBuffLevel(BuffType.LightningRateUp)    * 0.05f;
+    public float LightningRateBonus    => IsBuffEnabled ? GetBuffLevel(BuffType.LightningRateUp)    * 0.05f : 0f;
 
     /// <summary>Additive rate bonus for Fire spawn.</summary>
-    public float FireRateBonus         => GetBuffLevel(BuffType.FireRateUp)          * 0.05f;
+    public float FireRateBonus         => IsBuffEnabled ? GetBuffLevel(BuffType.FireRateUp)          * 0.05f : 0f;
 
     /// <summary>Additive rate reduction for Ice spawn (0.05 per level).</summary>
-    public float IceRateReduction      => GetBuffLevel(BuffType.IceRateDown)         * 0.05f;
+    public float IceRateReduction      => IsBuffEnabled ? GetBuffLevel(BuffType.IceRateDown)         * 0.05f : 0f;
 
     /// <summary>Cooldown reduction in turns for swap skill.</summary>
-    public int SkillCooldownReduction  => GetBuffLevel(BuffType.SkillCooldownReduce);
+    public int SkillCooldownReduction  => IsBuffEnabled ? GetBuffLevel(BuffType.SkillCooldownReduce) : 0;
 
     /// <summary>Additive reduction to hard piece weight (0.05 per level).</summary>
-    public float HardPieceRateReduction => GetBuffLevel(BuffType.HardPieceRateDown)  * 0.05f;
+    public float HardPieceRateReduction => IsBuffEnabled ? GetBuffLevel(BuffType.HardPieceRateDown)  * 0.05f : 0f;
 
     /// <summary>Score multiplier: level 0=1x, 1=1.5x, 2=1.75x, 3=2x.</summary>
     public float ScoreMultiplier
     {
         get
         {
+            if (!IsBuffEnabled) return 1.0f;
             int lvl = GetBuffLevel(BuffType.ScoreMultiplier);
             return lvl switch { 1 => 1.5f, 2 => 1.75f, 3 => 2.0f, _ => 1.0f };
         }
     }
 
     /// <summary>True if the player can clear row/col with 7 consecutive cells.</summary>
-    public bool SevenCellClearEnabled  => HasBuff(BuffType.SevenCellClear);
+    public bool SevenCellClearEnabled  => IsBuffEnabled && HasBuff(BuffType.SevenCellClear);
 
     /// <summary>True if the player can clear diagonal lines.</summary>
-    public bool DiagonalClearEnabled   => HasBuff(BuffType.DiagonalClear);
+    public bool DiagonalClearEnabled   => IsBuffEnabled && HasBuff(BuffType.DiagonalClear);
 
     // ── Unity lifecycle ────────────────────────────────────────
 
@@ -90,6 +94,10 @@ public class BuffManager : MonoBehaviour
     /// </summary>
     public void OnScoreChanged(int newScore)
     {
+        // Buff system is disabled in Level Mode
+        if (LevelModeManager.Instance != null && LevelModeManager.Instance.IsLevelModeActive)
+            return;
+
         if (newScore >= nextMilestoneScore)
         {
             TriggerBuffSelection();

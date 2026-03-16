@@ -280,6 +280,9 @@ public static class Polyominos
         _all = list.ToArray();
     }
 
+    /// <summary>Called by the custom editor to pre-build the index table at edit time.</summary>
+    public static void EnsureBuiltEditor() => EnsureBuilt();
+
     // ─────────────────────────────────────────────────────────
     //  Public API
     // ─────────────────────────────────────────────────────────
