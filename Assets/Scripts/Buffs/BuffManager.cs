@@ -86,6 +86,14 @@ public class BuffManager : MonoBehaviour
         else { Destroy(gameObject); return; }
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     // ── Called by ScoreManager every time score changes ────────
 
     /// <summary>

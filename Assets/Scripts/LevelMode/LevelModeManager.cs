@@ -3,24 +3,47 @@ using System.Collections.Generic;
 
 public class LevelModeManager : MonoBehaviour
 {
-    public static LevelModeManager Instance { get; private set; }
+    private static LevelModeManager _instance;
+    private static bool _isQuitting = false;
+
+    public static LevelModeManager Instance
+    {
+        get
+        {
+            if (_isQuitting) return null;
+
+            if (_instance == null)
+            {
+                _instance = FindObjectOfType<LevelModeManager>();
+                if (_instance == null)
+                {
+                    GameObject go = new GameObject("LevelModeManager (Created)");
+                    _instance = go.AddComponent<LevelModeManager>();
+                }
+            }
+            return _instance;
+        }
+    }
 
     public bool IsLevelModeActive { get; private set; }
     public LevelData CurrentLevel { get; private set; }
 
     public event System.Action OnGoalUpdated;
     public event System.Action OnLevelCompleted;
+    public event System.Action OnPoolChanged;
 
     public int CurrentLevelIndex { get; private set; } = -1;
 
     // ── Move Limit ────────────────────────────────────────────────
     /// <summary>Remaining block placements. -1 = unlimited.</summary>
     public int MovesLeft { get; private set; } = -1;
+    public int DiscardsLeft { get; private set; } = 0;
     /// <summary>True when this level has a move limit.</summary>
     public bool HasMoveLimit => CurrentLevel != null && CurrentLevel.MaxBlockPlacements > 0;
 
     public event System.Action OnMoveUsed;
     public event System.Action OnMovesExhausted;
+    public event System.Action OnDiscardUsed;
 
     // ── Block Pool ────────────────────────────────────────────────
     private List<(int index, Element[] elements)> blockPool = new List<(int, Element[])>();   // shuffled, drawn from front
@@ -39,12 +62,44 @@ public class LevelModeManager : MonoBehaviour
     {
         if (CurrentLevel == null || !CurrentLevel.HasSpawnPool) return (-1, null);
         if (poolDrawIndex >= blockPool.Count) return (-1, null);
-        return blockPool[poolDrawIndex++];
+        
+        var result = blockPool[poolDrawIndex++];
+        OnPoolChanged?.Invoke();
+        return result;
     }
 
     /// <summary>True when there is a defined pool and it is fully exhausted.</summary>
     public bool IsPoolExhausted => CurrentLevel != null && CurrentLevel.HasSpawnPool
         && poolDrawIndex >= blockPool.Count;
+
+    /// <summary>
+    /// Returns the next block in the pool without drawing it.
+    /// Returns (-1, null) if none left.
+    /// </summary>
+    public (int index, Element[] elements) PeekNext()
+    {
+        if (CurrentLevel == null || !CurrentLevel.HasSpawnPool) return (-1, null);
+        if (poolDrawIndex >= blockPool.Count) return (-1, null);
+        return blockPool[poolDrawIndex];
+    }
+
+    /// <summary>
+    /// Returns a dictionary showing how many of each shape index remain in the pool.
+    /// Used for the "Deck View" UI.
+    /// </summary>
+    public Dictionary<int, int> GetPoolSummary()
+    {
+        var summary = new Dictionary<int, int>();
+        if (CurrentLevel == null || !CurrentLevel.HasSpawnPool) return summary;
+
+        for (int i = poolDrawIndex; i < blockPool.Count; i++)
+        {
+            int shape = blockPool[i].index;
+            if (summary.ContainsKey(shape)) summary[shape]++;
+            else summary[shape] = 1;
+        }
+        return summary;
+    }
 
     // ── Goals ──────────────────────────────────────────────────────
     private List<LevelGoal> runtimeGoals = new List<LevelGoal>();
@@ -52,14 +107,27 @@ public class LevelModeManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null)
+        if (_instance == null)
         {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
+            _instance = this;
+            if (transform.parent == null) DontDestroyOnLoad(gameObject);
         }
-        else
+        else if (_instance != this)
         {
             Destroy(gameObject);
+        }
+    }
+
+    private void OnApplicationQuit()
+    {
+        _isQuitting = true;
+    }
+
+    private void OnDestroy()
+    {
+        if (_instance == this)
+        {
+            _instance = null;
         }
     }
 
@@ -67,7 +135,9 @@ public class LevelModeManager : MonoBehaviour
     {
         IsLevelModeActive = false;
         CurrentLevel = null;
+        CurrentLevelIndex = -1;
         MovesLeft = -1;
+        DiscardsLeft = 0;
         blockPool.Clear();
         poolDrawIndex = 0;
     }
@@ -107,6 +177,7 @@ public class LevelModeManager : MonoBehaviour
 
         // ── Goals ─────────────────────────────────────────────
         runtimeGoals.Clear();
+        DiscardsLeft = levelData.DiscardLimit;
         foreach (var goal in levelData.Goals)
         {
             runtimeGoals.Add(new LevelGoal
@@ -158,6 +229,42 @@ public class LevelModeManager : MonoBehaviour
         IsLevelModeActive = false;
         Debug.Log("[LevelMode] Failed — out of moves!");
         UIManager.Instance?.ShowGameOverScreen();
+    }
+
+    public void TryDiscard()
+    {
+        if (!IsLevelModeActive) return;
+        if (DiscardsLeft == 0) return; // Note: -1 still works if we wanted unlimited but usually it's positive
+        
+        // We'll let Blocks.cs handle the actual subtraction if it's successful
+    }
+
+    public void UseDiscard()
+    {
+        if (DiscardsLeft > 0) DiscardsLeft--;
+        
+        // Strategic cost: -2 moves (if limit exists)
+        if (HasMoveLimit)
+        {
+            MovesLeft = Mathf.Max(0, MovesLeft - 2);
+            OnMoveUsed?.Invoke();
+            
+            if (MovesLeft <= 0)
+            {
+                OnMovesExhausted?.Invoke();
+                // Check if already won (edge case, but good to be safe)
+                bool allDone = true;
+                foreach (var g in runtimeGoals) if (!g.IsCompleted) { allDone = false; break; }
+                
+                if (!allDone)
+                {
+                    Invoke(nameof(LevelFailed), 0.5f);
+                }
+            }
+        }
+
+        OnDiscardUsed?.Invoke();
+        OnGoalUpdated?.Invoke(); // Refresh UI including move count
     }
 
     public void OnGoalProgress(LevelGoalType type, int amount = 1)

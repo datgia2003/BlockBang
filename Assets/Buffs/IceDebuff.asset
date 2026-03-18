@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: IceDebuff
   m_EditorClassIdentifier: 
   BuffType: 3
-  BuffName: Ice
+  BuffName: Ice Rate Down
   BuffDescription: Decrease Ice block chance
   Icon: {fileID: 0}
   AccentColor: {r: 1, g: 1, b: 1, a: 1}

@@ -40,6 +40,10 @@ public class LevelDataEditor : Editor
                 new GUIContent("Max Placements", "0 = use pool total. Player fails if limit reached without completing goals."),
                 levelData.MaxBlockPlacements));
 
+        levelData.DiscardLimit = EditorGUILayout.IntField(
+            new GUIContent("Discard Limit", "How many times a player can skip a block. -1 for unlimited."),
+            levelData.DiscardLimit);
+
         int poolTotal = levelData.TotalPoolSize;
         if (levelData.HasSpawnPool)
         {

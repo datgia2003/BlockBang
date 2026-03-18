@@ -6,6 +6,7 @@ public class LevelGoalUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI goalsText;
     [SerializeField] private TextMeshProUGUI movesText;   // optional separate text for move counter
+    [SerializeField] private TextMeshProUGUI discardText; // NEW: text for discard counter
     [SerializeField] private GameObject container;
 
     private void Start()
@@ -14,6 +15,7 @@ public class LevelGoalUI : MonoBehaviour
         {
             LevelModeManager.Instance.OnGoalUpdated += UpdateUI;
             LevelModeManager.Instance.OnMoveUsed    += UpdateUI;
+            LevelModeManager.Instance.OnDiscardUsed += UpdateUI;
         }
         UpdateUI();
     }
@@ -52,9 +54,19 @@ public class LevelGoalUI : MonoBehaviour
                     ? new Color(1f, 0.3f, 0.3f)   // red warning
                     : Color.white;
             }
+        }
+
+        // ── Discard text ──────────────────────────────────────────
+        if (discardText != null)
+        {
+            if (mgr.DiscardsLeft >= 0)
+            {
+                discardText.text = $"Discards: {mgr.DiscardsLeft}";
+                discardText.color = mgr.DiscardsLeft == 0 ? Color.grey : Color.white;
+            }
             else
             {
-                movesText.text = "";
+                discardText.text = "";
             }
         }
     }
@@ -80,6 +92,7 @@ public class LevelGoalUI : MonoBehaviour
         {
             LevelModeManager.Instance.OnGoalUpdated -= UpdateUI;
             LevelModeManager.Instance.OnMoveUsed    -= UpdateUI;
+            LevelModeManager.Instance.OnDiscardUsed -= UpdateUI;
         }
     }
 }

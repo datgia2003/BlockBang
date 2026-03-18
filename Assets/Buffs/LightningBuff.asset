@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: LightningBuff
   m_EditorClassIdentifier: 
   BuffType: 0
-  BuffName: Lightning
+  BuffName: Lightning Rate Up
   BuffDescription: Increase Lightning block chance
   Icon: {fileID: 0}
   AccentColor: {r: 1, g: 1, b: 1, a: 1}

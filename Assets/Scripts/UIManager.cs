@@ -10,6 +10,7 @@ public class UIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI gameOverText;
     [SerializeField] private TextMeshProUGUI restartText;
     [SerializeField] private LevelData[] allLevels; // For level selection
+    [SerializeField] private GameObject mainMenuButton;
 
     public int LevelCount => allLevels != null ? allLevels.Length : 0;
 
@@ -25,6 +26,14 @@ public class UIManager : MonoBehaviour
         else
         {
             Destroy(gameObject);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
         }
     }
 
@@ -55,7 +64,7 @@ public class UIManager : MonoBehaviour
                 else
                 {
                     // Endless Mode: Just reload the scene
-                    UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+                    UnityEngine.SceneManagement.SceneManager.LoadScene("SampleScene");
                 }
             }
         }
@@ -64,11 +73,12 @@ public class UIManager : MonoBehaviour
     public void LoadEndlessMode()
     {
         LevelModeManager.Instance?.StopLevelMode();
-        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        UnityEngine.SceneManagement.SceneManager.LoadScene("SampleScene");
     }
 
     public void ReturnToMenu()
     {
+        LevelModeManager.Instance?.StopLevelMode();
         UnityEngine.SceneManagement.SceneManager.LoadScene("MenuScene");
     }
 
@@ -77,7 +87,7 @@ public class UIManager : MonoBehaviour
         if (allLevels != null && levelIndex < allLevels.Length)
         {
             LevelModeManager.Instance?.StartLevel(allLevels[levelIndex], levelIndex);
-            UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            UnityEngine.SceneManagement.SceneManager.LoadScene("SampleScene");
         }
     }
 

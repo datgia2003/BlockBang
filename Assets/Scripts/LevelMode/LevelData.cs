@@ -21,9 +21,11 @@ public class LevelData : ScriptableObject
     [Tooltip("List of goals to complete the level.")]
     public List<LevelGoal> Goals;
 
-    [Header("Move Limit")]
+    [Header("Move Limit & Discards")]
     [Tooltip("Maximum block placements allowed. 0 = unlimited.")]
     public int MaxBlockPlacements = 0;
+    [Tooltip("How many blocks the player can discard/skip. -1 for unlimited.")]
+    public int DiscardLimit = 3;
 
     [Header("Block Spawn Pool")]
     [Tooltip(

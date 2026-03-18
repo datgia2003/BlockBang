@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: ScoreBuff
   m_EditorClassIdentifier: 
   BuffType: 7
-  BuffName: Score
+  BuffName: Score Multiplier
   BuffDescription: Increase multiple score
   Icon: {fileID: 0}
   AccentColor: {r: 1, g: 1, b: 1, a: 1}

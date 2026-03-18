@@ -103,6 +103,12 @@ public class Block : MonoBehaviour
 
     private void OnMouseDown()
     {
+        if (blocks.IsDiscardMode)
+        {
+            blocks.Discard(this);
+            return;
+        }
+
         inputPoint = mainCamera.ScreenToWorldPoint(Input.mousePosition);
         transform.localPosition = position + inputOffset;
         transform.localScale = Vector3.one;
@@ -166,7 +172,7 @@ public class Block : MonoBehaviour
             if (ScreenShake.Instance != null)
                 ScreenShake.Instance.Shake(0.10f, 0.06f);
             gameObject.SetActive(false);
-            blocks.Remove();
+            blocks.Remove(this);
         }
         else
         {

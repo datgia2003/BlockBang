@@ -1,111 +1,135 @@
 # GAME DESIGN DOCUMENT: BLOCKFLASH
 
-**Dự án:** BlockFlash (Elemental Puzzle)  
-**Tình trạng:** Đã hoàn thiện cơ chế lõi (Core Prototype)  
-**Nền tảng:** PC / Mobile (Unity)  
-**Ngôn ngữ:** Tiếng Việt
+**Dự án:** BlockFlash
+**Thể loại:** Puzzle / Strategy / Casual  
+**Phiên bản:** 1.0  
+**Ngôn ngữ thiết kế:** Tiếng Anh 
+**Nền tảng:** PC / Mobile (Unity)
 
 ---
 
-## 1. TỔNG QUAN DỰ ÁN (PROJECT OVERVIEW)
-*   **Thể loại:** Puzzle (Xếp khối), Casual.
-*   **Mô tả ngắn:** Một trò chơi giải đố dựa trên cơ chế xếp khối kinh điển (giống 1010! hoặc Block Blast!), nhưng kết hợp thêm hệ thống **Nguyên tố (Elements)** và **Buff/Skill** để tạo ra chiều sâu chiến thuật và hiệu ứng bùng nổ.
-*   **Giá trị cốt lõi (Core Pillars):**
-    *   **Dễ chơi nhưng khó giỏi:** Thao tác kéo thả đơn giản nhưng cần tính toán để kích hoạt chuỗi phản ứng.
-    *   **Thỏa mãn thị giác (Juiciness):** Hiệu ứng cháy nổ, sét giật và rung màn hình tạo cảm giác hưng phấn.
-    *   **Chiến thuật linh hoạt:** Hệ thống Buff cho phép người chơi tùy biến phong cách chơi theo từng ván.
+## 1. TỔNG QUAN (OVERVIEW)
+
+### 1.1. Mục tiêu sản phẩm
+Tạo ra một phiên bản cải tiến cho dòng game xếp khối Block Blast bằng cách đưa vào các yếu tố chiến thuật: **Quản lý tài nguyên, Hệ thống Nguyên tố, Kĩ năng và Dự báo tương lai.**
+
+### 1.2. Đối tượng người chơi
+*   **Người chơi Casual:** Thích cảm giác nổ combo và dọn dẹp bàn cờ nhanh chóng.
+*   **Người chơi Puzzle Hardcore:** Muốn giải các bài toán logic phức tạp trong Level Mode với tài nguyên hữu hạn (Túi khối cố định, số lượt đi giới hạn).
 
 ---
 
-## 2. CƠ CHẾ GAME CHÍNH (CORE MECHANICS)
-### 2.1. Bàn chơi (The Grid)
-*   Kích thước: **8x8 ô**.
-*   Trạng thái ô: Trống (Empty), Đang giữ khối (Hover), Đã lấp đầy (Occupied).
+## 🕹️ 2. VÒNG LẶP GAME (GAME LOOP)
 
-### 2.2. Các khối (Polyominos)
-*   Game sử dụng các khối đa hình được chia thành **4 cấp độ (Tiers)**:
-    *   **Tier 1 (1-2 ô):** Dễ nhất, dùng để lấp chỗ trống.
-    *   **Tier 2 (3 ô):** Các khối chữ L nhỏ, thanh thẳng 3 ô.
-    *   **Tier 3 (3-4 ô):** Các khối Tetromino kinh điển (hình vuông, chữ Z, chữ T).
-    *   **Tier 4 (5 ô):** Pentomino, các khối khó và chiếm diện tích lớn.
-*   **Cơ chế Spawn:** Khối được sinh ra theo bộ 3 khối mỗi lượt. Tỉ lệ xuất hiện khối khó (Tier cao) tăng dần theo điểm số của người chơi.
-
-### 2.3. Quy tắc Clear (Xóa dòng)
-*   **Clear truyền thống:** Lấp đầy toàn bộ 1 hàng ngang hoặc 1 cột dọc.
-*   **Clear đặc biệt (Buff-based):** 
-    *   **Seven Cell Clear:** Xóa hàng/cột nếu có ít nhất 7 ô liền nhau được lấp đầy.
-    *   **Diagonal Clear:** Xóa theo 2 đường chéo chính của bàn chơi, có thể kết hợp với buff Seven Cell Clear.
+1.  **Nhận quân bài:** Hệ thống nạp 3 khối chờ vào slot (**Rolling Refill** - nạp ngay khi có ô trống nếu đang ở Level Mode).
+2.  **Phân tích & Dự đoán (Level Mode):** Người chơi xem bảng **Deck Summary** (tổng số khối còn lại) và ô **Next Piece** (khối sắp nạp) để lên kế hoạch.
+3.  **Hành động:** 
+    *   **Đặt khối:** Khớp khối vào bàn cờ để xóa dòng.
+    *   **Bỏ khối (Discard) (Level Mode):** Đánh đổi 2 lượt đi (-2 Moves) để lấy khối mới từ túi nếu cần.
+4.  **Hiệu ứng:** Kích hoạt các nguyên tố (**Fire**, **Lightning**, **Ice**) để dọn dẹp bàn cờ diện rộng hoặc tạo chuỗi combo.
+5.  **Phát triển:** Nhận Buff và tiến xa nhất có thể (Endless Mode), hoặc Hoàn thành mục tiêu của mỗi màn chơi (Level Mode).
 
 ---
 
-## 3. HỆ THỐNG NGUYÊN TỐ (ELEMENTAL SYSTEM)
-Mỗi ô trong khối có thể mang một thuộc tính nguyên tố, tạo ra các "phản ứng" khi bị xóa.
+## 🧱 3. CƠ CHẾ CHÍNH (CORE MECHANICS)
 
-| Nguyên tố | Hiệu ứng khi bị xóa (On Clear) |
-| :--- | :--- |
-| **Normal** | Không có hiệu ứng đặc biệt, cộng điểm cơ bản. |
-| **Fire** | Kích hoạt hiệu ứng cháy nổ 3x3 sau 1 giây chờ. Gây nổ hàng loạt ô xung quanh. |
-| **Lightning** | Phóng sét tới 3 ô ngẫu nhiên đang có khối trên bàn và xóa chúng ngay lập tức. |
-| **Ice** | Không biến mất ngay. Khi bị xóa lần 1, lớp băng vỡ ra và ô đó trở thành ô **Normal**. Cần xóa 2 lần. |
+### 3.1. Bàn chơi (The Grid)
+*   Kích thước 8x8 ô vuông đồng nhất.
+*   Mỗi ô có thể mang: Trạng thái (Trống/Đầy) và thuộc tính Nguyên tố (Element).
+*   Độ phân giải hiển thị: Các ô nguyên tố có màu sắc, icon  đặc trưng để dễ nhận diện chiến thuật.
 
----
+### 3.2. Quy tắc Đặt khối & Xóa dòng
+*   **Xóa hàng ngang/dọc:** Khi lấp đầy 8 ô bất kể nguyên tố.
+*   **Combo:** Xóa nhiều dòng cùng lúc sẽ nhân hệ số điểm cộng thêm.
+*   **Diagonal Clear (Buff):** Xóa theo 2 đường chéo chính qua tâm của bàn cờ.
+*   **7-Cell Clear (Buff):** Giảm độ khó, chỉ cần lấp đầy 7/8 ô trong hàng để kích nổ.
 
-## 4. HỆ THỐNG BUFF & SKILL
-### 4.1. Buff (Cường hóa thụ động)
-Khi đạt các mốc điểm nhất định (Milestones), người chơi được chọn 1 trong 3 Buff ngẫu nhiên:
-1.  **LightningRateUp:** Tăng tỉ lệ xuất hiện khối nguyên tố Sét.
-2.  **FireRateUp:** Tăng tỉ lệ xuất hiện khối nguyên tố Lửa.
-3.  **IceRateDown:** Giảm tỉ lệ xuất hiện khối Băng (giảm độ khó).
-4.  **DiagonalClear:** Mở khóa khả năng xóa dòng theo đường chéo.
-5.  **SevenCellClear:** Cho phép xóa hàng/cột khi đạt 7 ô liên tiếp.
-6.  **HardPieceRateDown:** Giảm tỉ lệ xuất hiện các khối Tier 4.
-7.  **ScoreMultiplier:** Nhân hệ số điểm số nhận được.
-8.  **SkillCooldownReduce:** Giảm thời gian hồi chiêu của kỹ năng chủ động.
-
-### 4.2. Skill (Kỹ năng chủ động)
-*   **Swap Skill:** Cho phép người chơi đổi bộ 3 khối hiện tại lấy bộ mới nếu cảm thấy không thể đặt được vào bàn. Cooldown dựa trên số lượt đặt khối.
+### 3.3. Rolling Refill (Nạp khối liên tục) trong Level Mode
+*   Khác với game truyền thống và Endless Mode (phải dùng hết 3 khối mới đổi bộ mới), hệ thống sẽ nạp 1 khối mới từ túi (Pool) ngay khi 1 trong 3 slot chờ bị trống.
+*   Tính năng này tối ưu hóa sự lựa chọn của người chơi tại mọi thời điểm, cho phép "xả" khối rác nhanh để chờ khối quan trọng.
 
 ---
 
-## 5. CHẾ ĐỘ CHƠI (GAME MODES)
-### 5.1. Classic Mode (Endless)
-*   Chế độ vô tận, cố gắng đạt điểm cao nhất có thể, tương tự Block Blast
-*   Hệ thống Buff được kích hoạt liên tục qua các mốc điểm, Skill có thể được dùng.
-*   Game kết thúc khi không còn chỗ trống để đặt bất kỳ khối nào trong bộ 3 khối hiện tại.
+## 🔥 4. HỆ THỐNG NGUYÊN TỐ (ELEMENTAL SYSTEM)
 
-### 5.2. Level Mode (Missions)
-*   Các màn chơi được thiết kế sẵn (Hand-crafted) với các mục tiêu cụ thể, ví dụ:
-    *   Xóa tổng 10 hàng và cột.
-    *   Kích hoạt nổ Lửa 5 lần.
-    *   Phá vỡ 20 ô Băng.
-*   Bàn chơi được xếp sẵn các khối ở vị trí hiểm hóc, các khối chờ cũng được xếp sẵn.
-*   **Lưu ý:** Hệ thống Buff, Skill bị vô hiệu hóa trong chế độ này để đảm bảo tính thử thách của Level Design.
+Mỗi nguyên tố đại diện cho một lối chơi và giải pháp khác nhau:
+
+### 4.1. Fire (Lửa) - Sức mạnh bùng nổ diện rộng
+*   **Hiệu ứng:** Khi dòng chứa ô Lửa bị xóa, nó kích hoạt vụ nổ 3x3 quanh ô đó.
+*   **Tâm lý:** Giúp người chơi cảm thấy thỏa mãn khi dọn dẹp được các cụm khối "rác" tích tụ lâu ngày, tạo ra các khoảng trống lớn tức thì.
+
+### 4.2. Lightning (Sét) - Giải cứu ô kẹt
+*   **Hiệu ứng:** Khi dòng chứa ô Sét bị xóa, nó phóng sét phá hủy ngẫu nhiên 3 ô đang có khối trên bàn cờ.
+*   **Tâm lý:** Là "vị cứu tinh" khi người chơi lỡ tay để lại những lỗ hổng đơn lẻ không thể lấp bằng khối to.
+
+### 4.3. Ice (Băng) - Trở ngại đa tầng
+*   **Hiệu ứng:** Ô băng cần bị xóa 2 lần. Lần 1: Lớp băng vỡ ra (ô trở lại trạng thái Normal nhưng vẫn ở vị trí cũ). Lần 2: Ô biến mất hoàn toàn.
+*   **Tâm lý:** Tạo ra các "vùng cấm" tạm thời, buộc người chơi phải tập trung xóa hàng tại cùng một vị trí 2 lần liên tục.
+
+--- Có thể cải tiến cách các nguyên tố tương tác với nhau trong tương lai
+
+## 🧩 5. CHẾ ĐỘ CHƠI CẤP ĐỘ (LEVEL MODE)
+
+### 5.1. Quản lý túi khối (Deck Management) và Giới hạn lượt đi (Move Limit)
+*   **Spawn Pool:** Trong Level Mode, danh sách khối là cố định, mỗi màn chơi có 1 danh sách khác nhau.
+*   **Deck View (Summary):** Hiển thị danh sách khối và số lượng chính xác còn lại trong túi (Ví dụ: "Còn 2 mảnh chữ L, 1 mảnh 1x1").
+*   **Next Piece Preview (Up Next):** Hiển thị khối thứ 4 (khối sắp được nạp vào slot trống) dưới dạng hình ảnh mờ (Alpha 50%).
+*   **Move Limit:** Số lượt đi tối đa cho mỗi màn chơi.
+
+### 5.2. Chức năng Bỏ khối (Discard System)
+*   **Thao tác:** Nút Discard -> Chọn 1 khối chờ -> Xóa bỏ -> Nạp khối tiếp theo từ túi (khối tiếp theo từ túi là khối thứ 4 trong danh sách khối chờ).
+*   **Strategic Cost:** 
+    *   Mỗi lần bỏ khối trừ trực tiếp **2 lượt đi (Moves)**.
+    *   **Decision Making:** Người chơi phải cân nhắc: "Mình nên bỏ khối CHỮ L này để lấy khối 1x1 chuẩn bị cho mục tiêu, dù mất 2 lượt đi, hay đặt nó vào vị trí xấu và chỉ mất 1 lượt?".
+        Kết thúc khi hoàn thành mục tiêu đặt ra của từng màn chơi.
+---
+
+## 📈 6. CHẾ ĐỘ VÔ TẬN (ENDLESS MODE)
+    Là chế độ cải tiến từ Block Blast truyền thống
+*   **Độ khó lũy tiến:** Khối khó (Tier 4 như Pentomino) xuất hiện nhiều hơn khi điểm số tăng cao.
+*   **Hệ thống Buff:** Mỗi mốc điểm nhất định (score = 50, 100, 200, 300, 400, 500...) sẽ hiện 3 tấm thẻ Buff ngẫu nhiên để người chơi "Xây dựng Build" riêng (Tăng tỷ lệ nguyên tố, Mở khóa đường chéo, Nhân điểm số...).
+*   **Kỹ năng Swap:** Đổi toàn bộ 3 khối hiện tại lấy bộ mới hoàn toàn (có cooldown dựa trên lượt đặt khối).
+        Kết thúc khi người chơi không thể đặt thêm khối nào nữa.
+---
+
+## 🖥️ 7. GIAO DIỆN NGƯỜI DÙNG (UI/HUD ARCHITECTURE)
+
+### 7.1. Màn hình Gameplay (HUD)
+*   **Top Bar:** Điểm số, Mục tiêu (Goals), Số lượt đi còn lại (Moves).
+*   **Center:** Bàn cờ 8x8 với hiệu ứng Grid và Element rực rỡ.
+*   **Dashboard:** 
+    *   Bộ 3 khối chờ tại trung tâm dưới.
+    *   Ô **UP NEXT** nằm phía bên cạnh bộ 3 khối.
+    *   Nút **Discard** tích hợp bộ đếm lượt còn lại ngay trên nút.
+*   **Summary Panel:** Bật/Tắt để xem toàn bộ danh sách khối còn lại trong túi.
 
 ---
 
-## 6. GIAO DIỆN & TRẢI NGHIỆM NGƯỜI DÙNG (UI/UX)
-*   ** HUD (Heads-up Display):**
-    *   Điểm số hiện tại.
-    *   Nút kỹ năng Swap Blocks.
-*   **Visual Juice:**
-    *   **Ghost Block:** Hiển thị mờ vị trí khối sẽ đặt xuống để người chơi dễ căn chỉnh.
-    *   **Screen Shake:** Rung nhẹ màn hình khi nổ Lửa hoặc xóa nhiều dòng cùng lúc.
-    *   **Score Popup:** Hiển thị con số điểm bay lên tại vị trí vừa xóa ô.
+## ✨ 8. HIỆU ỨNG THỊ GIÁC & ÂM THANH (JUICE & AUDIO)
+
+### 8.1. Visual Effects (VFX / Polish)
+*   **Screen Shake:** Rung màn hình khi có vụ nổ Lửa hoặc Combo lớn.
+*   **Particle Burst:** Tia điện vàng rực rỡ khi Sét giật; Hiệu ứng vỡ nát khi Băng bị phá.
+*   **Ghost Block:** Hiển thị vị trí mờ của khối khi người chơi đang kéo rà trên bàn cờ.
+*   **Popup Score:** Điểm số bay lên có màu vàng kim cho các pha Combo xuất sắc.
+*   **Tweening:** Hoạt ảnh phóng to/thu nhỏ mềm mại khi nhặt khối và đặt khối.
+
+### 8.2. Audio Direction
+*   **Procedural Music:** Nhạc nền tự động tăng cường độ (Drum & Bass) khi người chơi sắp hoàn thành mục tiêu hoặc đạt điểm cao kỷ lục.
+*   **SFX Layers:** Tiếng "thịch" đầm chắc khi đặt khối thành công; Tiếng "bùm" vang dền từ vụ nổ Lửa.
 
 ---
 
-## 7. ÂM THANH & NHẠC NỀN (AUDIO)
-*   **Nhạc nền (BGM):** Sử dụng hệ thống **Procedural Music**. Nhạc nền tự động thay đổi nhạc điệu hoặc cường độ mỗi khi người chơi đạt thêm 500 điểm, tạo cảm giác tiến triển.
-*   **Hiệu ứng âm thanh (SFX):**
-    *   Tiếng "Swoosh" khi kéo khối.
-    *   Tiếng nổ đanh khi xóa dòng (Combo càng cao tiếng càng vang).
-    *   Âm thanh đặc trưng cho từng nguyên tố (tiếng điện xẹt, tiếng lửa bùng, tiếng băng vỡ).
+## 🛠️ 9. CÔNG CỤ PHÁT TRIỂN (TECHNICAL ARCHITECTURE)
 
----
+### 9.1. LevelData (ScriptableObject)
+Lưu trữ toàn bộ định nghĩa một màn chơi độc lập:
+*   Mục tiêu (Score / Clear / Trigger Elements).
+*   Địa hình ban đầu (Ma trận 8x8).
+*   Danh sách túi khối (Spawn Pool) chi tiết đến từng ô nguyên tố.
+*   Thông số lượt đi & giới hạn nổ/bỏ khối.
 
-## 8. CÔNG CỤ PHÁT TRIỂN (TECHNICAL TOOLS)
-*   **LevelDataEditor:** Công cụ tùy chỉnh trong Unity Editor để Designer có thể:
-    *   Vẽ bàn chơi ban đầu cho các Level.
-    *   Thiết lập mục tiêu (Goals) cho từng màn.
-    *   Thiết lập các khối chờ cho từng màn.
-    *   Chỉ định vị trí các ô nguyên tố cố định.
+### 9.2. LevelDataEditor (Unity Tooling)
+*   Giao diện thiết kế trực quan ngay trong Unity Inspector.
+*   Tính năng vẽ địa hình bằng cách click chuột, tự động Serialize dữ liệu xuống ScriptableObject.
+*   Hỗ trợ thiết kế Element cho từng cell của từng khối trong Pool DRAW.

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 7cellsBuff
   m_EditorClassIdentifier: 
   BuffType: 4
-  BuffName: 7C
+  BuffName: Seven Cells Clear
   BuffDescription: Seven Cells Clear
   Icon: {fileID: 0}
   AccentColor: {r: 1, g: 1, b: 1, a: 1}

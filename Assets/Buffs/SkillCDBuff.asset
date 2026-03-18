@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: SkillCDBuff
   m_EditorClassIdentifier: 
   BuffType: 1
-  BuffName: Cooldown Reduce
+  BuffName: Skill Cooldown Reduce
   BuffDescription: Reduce the skill cooldown
   Icon: {fileID: 0}
   AccentColor: {r: 1, g: 1, b: 1, a: 1}

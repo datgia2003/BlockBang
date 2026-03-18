@@ -18,6 +18,7 @@ public class Blocks : MonoBehaviour
     private int blockCount = 0;
     private bool isGameOver = false;
     private bool pendingGameOverCheck = false;
+    public bool IsDiscardMode { get; private set; } = false;
 
     // ─────────────────────────────────────────────────────────
     void Update()
@@ -101,39 +102,118 @@ public class Blocks : MonoBehaviour
         pendingGameOverCheck = true;
     }
 
-    public void Remove()
+    public void Remove(Block block)
     {
+        int slotIndex = System.Array.IndexOf(blocks, block);
+        
         // Notify LevelModeManager of placement (before possible game over)
         bool outOfMoves = LevelModeManager.Instance?.OnBlockPlaced() ?? false;
 
-        blockCount--;
-        if (blockCount <= 0)
+        var lvl = LevelModeManager.Instance;
+        bool isLevelWithPool = lvl != null && lvl.IsLevelModeActive && lvl.CurrentLevel != null && lvl.CurrentLevel.HasSpawnPool;
+
+        if (isLevelWithPool)
         {
-            blockCount = 0;
-
-            // If we're in level mode and out of moves, don't generate new blocks
-            // LevelModeManager.LevelFailed() will handle the screen
-            if (outOfMoves) return;
-
-            GenerateNewBlocks();
-            return;
+            // STRATEGY IMPROVEMENT: Rolling Refill
+            // Instead of waiting for all 3 to be gone, refill this specific slot immediately.
+            if (!outOfMoves)
+            {
+                RefillSlot(slotIndex);
+            }
+            else
+            {
+                // Truly out of moves (pool empty + move limit reached)
+                blockCount--;
+                polyominoIndexes[slotIndex] = -1;
+            }
         }
-
-        // If out of moves but there are still blocks in the current batch, hide them
-        if (outOfMoves)
+        else
         {
-            for (int i = 0; i < blocks.Length; i++)
-                blocks[i].gameObject.SetActive(false);
-            return;
+            // Traditional Endless Mode logic: wait for batch to be empty
+            blockCount--;
+            if (blockCount <= 0)
+            {
+                blockCount = 0;
+                GenerateNewBlocks();
+                return;
+            }
         }
 
         pendingGameOverCheck = true;
+    }
+
+    private void RefillSlot(int i)
+    {
+        var lvl = LevelModeManager.Instance;
+        var drawn = lvl.DrawFromPool();
+        
+        if (drawn.index < 0)
+        {
+            blocks[i].gameObject.SetActive(false);
+            polyominoIndexes[i] = -1;
+            blockCount--;
+        }
+        else
+        {
+            polyominoIndexes[i] = drawn.index;
+            blocks[i].gameObject.SetActive(true);
+            blocks[i].Show(polyominoIndexes[i], drawn.elements);
+            // blockCount remains the same because we replaced 1 with 1
+        }
     }
 
     public void ResetSortingOrder()
     {
         for (int i = 0; i < blocks.Length; i++)
             blocks[i].SetSortingOrder(0);
+    }
+
+    public void ToggleDiscardMode()
+    {
+        if (LevelModeManager.Instance == null || !LevelModeManager.Instance.IsLevelModeActive) return;
+        if (LevelModeManager.Instance.DiscardsLeft <= 0) 
+        {
+            IsDiscardMode = false;
+            return;
+        }
+
+        // Strategic cost check: Must have at least 2 moves left (if limited)
+        if (LevelModeManager.Instance.HasMoveLimit && LevelModeManager.Instance.MovesLeft < 2)
+        {
+            Debug.Log("[Blocks] Not enough moves to discard!");
+            IsDiscardMode = false;
+            return;
+        }
+
+        IsDiscardMode = !IsDiscardMode;
+        Debug.Log($"[Blocks] Discard Mode: {IsDiscardMode}");
+        
+        // Visual feedback: maybe scale or tint the blocks?
+        foreach (var b in blocks)
+        {
+            if (b.gameObject.activeSelf)
+            {
+                // We'll let the block handle its own visual state if needed
+            }
+        }
+    }
+
+    public void Discard(Block block)
+    {
+        if (!IsDiscardMode) return;
+        
+        int slotIndex = System.Array.IndexOf(blocks, block);
+        if (slotIndex == -1) return;
+
+        var lvl = LevelModeManager.Instance;
+        if (lvl == null || lvl.DiscardsLeft <= 0) return;
+
+        Debug.Log($"[Blocks] Discarding block in slot {slotIndex}");
+        lvl.UseDiscard();
+        RefillSlot(slotIndex);
+        
+        // Turn off discard mode after one use
+        IsDiscardMode = false;
     }
 
     // ─────────────────────────────────────────────────────────
