@@ -40,11 +40,22 @@ Tạo ra một phiên bản cải tiến cho dòng game xếp khối Block Blast
 
 ### 3.2. Quy tắc Đặt khối & Xóa dòng
 *   **Xóa hàng ngang/dọc:** Khi lấp đầy 8 ô bất kể nguyên tố.
-*   **Combo:** Xóa nhiều dòng cùng lúc sẽ nhân hệ số điểm cộng thêm.
-*   **Diagonal Clear (Buff):** Xóa theo 2 đường chéo chính qua tâm của bàn cờ.
+*   **Combo:** Xóa hàng liên tiếp trong các lượt đi, hoặc xóa nhiều hàng cùng lúc sẽ tăng Combo, từ đó tăng hệ số nhân điểm (Multiplier).
+*   **Diagonal Clear (Buff):** Xóa theo các đường chéo (8 ô, hoặc 7 ô nếu có Buff).
 *   **7-Cell Clear (Buff):** Giảm độ khó, chỉ cần lấp đầy 7/8 ô trong hàng để kích nổ.
+*   **Tính điểm:** Score = (Số ô xóa được x 5) x Hệ số Combo.
 
-### 3.3. Rolling Refill (Nạp khối liên tục) trong Level Mode
+### 3.3. Hệ thống tính điểm & Combo (Scoring System)
+*   **Công thức:** `Score = (CellClear x 5) x ComboMultiplier`
+*   **CellClear:** Mỗi ô đơn lẻ bị xóa được tính +5 điểm (Ví dụ: 1 hàng 8 ô = 40 điểm cơ bản).
+*   **ComboMultiplier:** Bắt đầu từ x1.0 và tăng thêm 0.1 cho mỗi cấp Combo (x1.0 -> x1.1 -> x1.2...).
+*   **Cơ chế tăng Combo:** 
+    *   Tăng +1 Combo cho mỗi hàng/cột (8 ô) được xóa.
+    *   Tăng +1 Combo cho mỗi chuỗi 7+ ô được xóa (nếu có Buff 7-Cell hoặc Diagonal).
+    *   Combo tích lũy khi xóa nhiều hàng cùng lúc HOẶC xóa hàng liên tiếp trong các lượt đi kế tiếp.
+*   **Cơ chế Reset:** Combo sẽ quay về 0 nếu người chơi kết thúc lượt đặt khối (bao gồm cả các hiệu ứng nổ dây chuyền) mà không xóa được hàng/cột nào.
+
+### 3.4. Rolling Refill (Nạp khối liên tục) trong Level Mode
 *   Khác với game truyền thống và Endless Mode (phải dùng hết 3 khối mới đổi bộ mới), hệ thống sẽ nạp 1 khối mới từ túi (Pool) ngay khi 1 trong 3 slot chờ bị trống.
 *   Tính năng này tối ưu hóa sự lựa chọn của người chơi tại mọi thời điểm, cho phép "xả" khối rác nhanh để chờ khối quan trọng.
 
@@ -65,8 +76,8 @@ Mỗi nguyên tố đại diện cho một lối chơi và giải pháp khác nh
 ### 4.3. Ice (Băng) - Trở ngại đa tầng
 *   **Hiệu ứng:** Ô băng cần bị xóa 2 lần. Lần 1: Lớp băng vỡ ra (ô trở lại trạng thái Normal nhưng vẫn ở vị trí cũ). Lần 2: Ô biến mất hoàn toàn.
 *   **Tâm lý:** Tạo ra các "vùng cấm" tạm thời, buộc người chơi phải tập trung xóa hàng tại cùng một vị trí 2 lần liên tục.
-
---- Có thể cải tiến cách các nguyên tố tương tác với nhau trong tương lai
+*   **Hướng phát triển:** Có thể cải tiến cách các nguyên tố tương tác với nhau trong tương lai, thêm các nguyên tố mới.
+--- 
 
 ## 🧩 5. CHẾ ĐỘ CHƠI CẤP ĐỘ (LEVEL MODE)
 
@@ -81,7 +92,7 @@ Mỗi nguyên tố đại diện cho một lối chơi và giải pháp khác nh
 *   **Strategic Cost:** 
     *   Mỗi lần bỏ khối trừ trực tiếp **2 lượt đi (Moves)**.
     *   **Decision Making:** Người chơi phải cân nhắc: "Mình nên bỏ khối CHỮ L này để lấy khối 1x1 chuẩn bị cho mục tiêu, dù mất 2 lượt đi, hay đặt nó vào vị trí xấu và chỉ mất 1 lượt?".
-        Kết thúc khi hoàn thành mục tiêu đặt ra của từng màn chơi.
+*   **Kết thúc:** Kết thúc khi hoàn thành mục tiêu đặt ra của từng màn chơi.
 ---
 
 ## 📈 6. CHẾ ĐỘ VÔ TẬN (ENDLESS MODE)
@@ -89,7 +100,7 @@ Mỗi nguyên tố đại diện cho một lối chơi và giải pháp khác nh
 *   **Độ khó lũy tiến:** Khối khó (Tier 4 như Pentomino) xuất hiện nhiều hơn khi điểm số tăng cao.
 *   **Hệ thống Buff:** Mỗi mốc điểm nhất định (score = 50, 100, 200, 300, 400, 500...) sẽ hiện 3 tấm thẻ Buff ngẫu nhiên để người chơi "Xây dựng Build" riêng (Tăng tỷ lệ nguyên tố, Mở khóa đường chéo, Nhân điểm số...).
 *   **Kỹ năng Swap:** Đổi toàn bộ 3 khối hiện tại lấy bộ mới hoàn toàn (có cooldown dựa trên lượt đặt khối).
-        Kết thúc khi người chơi không thể đặt thêm khối nào nữa.
+*   **Kết thúc:** Kết thúc khi người chơi không thể đặt thêm khối nào nữa.
 ---
 
 ## 🖥️ 7. GIAO DIỆN NGƯỜI DÙNG (UI/HUD ARCHITECTURE)

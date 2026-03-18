@@ -342,6 +342,12 @@ public class Board : MonoBehaviour
         }
         ClearFullLines(point, polyominoColumns, polyominoRows);
         hoverPoints.Clear();
+
+        // If no effects are triggered (no lines cleared, no elements active), turn ends immediately.
+        // Otherwise, EffectChainRoutine will handle EndTurn when it's done.
+        if (!IsEffectChainActive)
+            ScoreManager.Instance?.EndTurn();
+
         SkillManager.Instance.OnBlockPlaced();
     }
 
@@ -453,8 +459,8 @@ public class Board : MonoBehaviour
         foreach (var c in fullLineColumns)
         {
             var midWorld = cells[Size / 2, c].transform.position;
-            ScoreManager.Instance.AddScore(40);
-            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
+            int amount = ScoreManager.Instance.AddClears(8, 1, midWorld);
+            ScorePopup.Create(midWorld, amount, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
             if (ParticleBurst.Instance != null)
@@ -489,8 +495,8 @@ public class Board : MonoBehaviour
         foreach (var r in fullLineRows)
         {
             var midWorld = cells[r, Size / 2].transform.position;
-            ScoreManager.Instance.AddScore(40);
-            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
+            int amount = ScoreManager.Instance.AddClears(8, 1, midWorld);
+            ScorePopup.Create(midWorld, amount, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
             if (ParticleBurst.Instance != null)
@@ -627,8 +633,8 @@ public class Board : MonoBehaviour
 
         if (!isClearingLine) 
         {
-            ScoreManager.Instance.AddScore(5);
-            ScorePopup.Create(cells[r, c].transform.position, 5, UnityEngine.Random.Range(0, 3));
+            int amount = ScoreManager.Instance.AddClears(1, 0);
+            ScorePopup.Create(cells[r, c].transform.position, amount, UnityEngine.Random.Range(0, 3));
         }
         var elemType    = elements[r, c];
         var elementData = elementRegistry.GetElementData(elemType);
@@ -709,6 +715,7 @@ public class Board : MonoBehaviour
         }
 
         isEffectChainActive = false;
+        ScoreManager.Instance?.EndTurn();
     }
 
     // PickRandomOccupied is now unused because Lightning tracks peeked targets directly
@@ -764,8 +771,8 @@ public class Board : MonoBehaviour
         foreach (int c in newCols)
         {
             var midWorld = cells[Size / 2, c].transform.position;
-            ScoreManager.Instance.AddScore(40);
-            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
+            int amount = ScoreManager.Instance.AddClears(8, 1, midWorld);
+            ScorePopup.Create(midWorld, amount, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
             ParticleBurst.Instance?.LineClearBurst(cells[Size / 2, c].transform.position, Color.white);
             for (int r = 0; r < Size; r++)
@@ -783,8 +790,8 @@ public class Board : MonoBehaviour
         foreach (int r in newRows)
         {
             var midWorld = cells[r, Size / 2].transform.position;
-            ScoreManager.Instance.AddScore(40);
-            ScorePopup.Create(midWorld, 40, UnityEngine.Random.Range(0, 3));
+            int amount = ScoreManager.Instance.AddClears(8, 1, midWorld);
+            ScorePopup.Create(midWorld, amount, UnityEngine.Random.Range(0, 3));
             ScreenShake.Instance?.Shake(0.20f, 0.14f);
             ParticleBurst.Instance?.LineClearBurst(cells[r, Size / 2].transform.position, Color.white);
             for (int c = 0; c < Size; c++)
@@ -816,6 +823,7 @@ public class Board : MonoBehaviour
     private void ClearSevenCellRuns()
     {
         const int MinRun = 7;
+        int runsFound = 0;
 
         // ── Pass 1: Collect all cells that belong to a 7+ run ──
         var toClear = new System.Collections.Generic.HashSet<Vector2Int>();
@@ -831,8 +839,11 @@ public class Board : MonoBehaviour
                 else
                 {
                     if (runLen >= MinRun)
+                    {
+                        runsFound++;
                         for (int cc = runStart; cc < runStart + runLen; cc++)
                             toClear.Add(new Vector2Int(cc, r));
+                    }
                     runLen = 0; runStart = -1;
                 }
             }
@@ -849,8 +860,11 @@ public class Board : MonoBehaviour
                 else
                 {
                     if (runLen >= MinRun)
+                    {
+                        runsFound++;
                         for (int rr = runStart; rr < runStart + runLen; rr++)
                             toClear.Add(new Vector2Int(c, rr));
+                    }
                     runLen = 0; runStart = -1;
                 }
             }
@@ -860,15 +874,16 @@ public class Board : MonoBehaviour
 
         // ── Pass 2: Clear all collected cells ──────────────────
         isClearingLine = true;
-        int totalScore = 5 * toClear.Count;
-        ScoreManager.Instance.AddScore(totalScore);
         
+        Vector3 midWorld = Vector3.zero;
         if (toClear.Count > 0)
         {
             var elem = System.Linq.Enumerable.ElementAt(toClear, toClear.Count / 2);
-            var midWorld = cells[elem.y, elem.x].transform.position;
-            ScorePopup.Create(midWorld, totalScore, UnityEngine.Random.Range(0, 3));
+            midWorld = cells[elem.y, elem.x].transform.position;
         }
+
+        int amount = ScoreManager.Instance.AddClears(toClear.Count, runsFound, midWorld);
+        ScorePopup.Create(midWorld, amount, UnityEngine.Random.Range(0, 3));
         
         ScreenShake.Instance?.Shake(0.20f, 0.14f);
 
@@ -955,18 +970,20 @@ public class Board : MonoBehaviour
 
     private void ClearDiagonalSegment(int startRow, int startCol, int colDir, int segStart, int segLen)
     {
-        int totalScore = 40 * segLen / Size + 5 * segLen;
-        ScoreManager.Instance.AddScore(totalScore);
-
         int midIdx = segStart + segLen / 2;
         int midR = startRow + midIdx;
         int midC = startCol + midIdx * colDir;
-        if (IsWithinBounds(midC, midR))
+        Vector3? midWorld = IsWithinBounds(midC, midR) ? cells[midR, midC].transform.position : null;
+
+        // If diagonal is at least 7 cells (Buff 5 check or full main diagonal), count as a line for combo
+        int lineIncr = (segLen >= 7) ? 1 : 0;
+        int amount = ScoreManager.Instance.AddClears(segLen, lineIncr, midWorld);
+
+        if (midWorld.HasValue)
         {
-            var midWorld = cells[midR, midC].transform.position;
-            ScorePopup.Create(midWorld, totalScore, UnityEngine.Random.Range(0, 3));
+            ScorePopup.Create(midWorld.Value, amount, UnityEngine.Random.Range(0, 3));
             if (ParticleBurst.Instance != null)
-                ParticleBurst.Instance.LineClearBurst(cells[midR, midC].transform.position, Color.yellow);
+                ParticleBurst.Instance.LineClearBurst(midWorld.Value, Color.yellow);
         }
 
         ScreenShake.Instance?.Shake(0.22f, 0.15f);
